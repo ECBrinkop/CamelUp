@@ -4,9 +4,9 @@ Created on Mon Jan  4 11:07:12 2021
 
 @author: eikeb
 """
-import copy
+import copy, time
 from random import randrange
-import numpy as np, threading as th
+import numpy as np, threading as th, pandas as pd
 
 class CamelUp():
     '''
@@ -20,6 +20,7 @@ class CamelUp():
     start: bool
         
     
+    !!! simulation mode should be implemented to test certain strategies.
     
     
     Class lists include:
@@ -45,8 +46,8 @@ class CamelUp():
                      '                                      |',
                      '                                      —',
                      '                                      |',
-                     '                                      |',
-                     ' <13>                            < 5> |',
+                     '         Value of Information:        |',
+                     ' <13>            {VOI:5.3f}           < 5> |',
                      '                                      |',
                      '                                      |',
                      '                                      —',
@@ -58,6 +59,7 @@ class CamelUp():
                      '———————————————————————————————————————']
     print_dim = [31,120]
     render_field_cell_width = 12
+    parallel_workers= 8
     def __init__(self,
                  n_players:int,
                  start:bool = True,
@@ -70,6 +72,7 @@ class CamelUp():
         self.game_winner = []
         self.game_loser = []
         self.moved = []
+        self.VOI = 0
         self.win_prob = {}
         self.game_inventory = copy.deepcopy(self.Inventory)
         self.game_field = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
@@ -91,8 +94,10 @@ class CamelUp():
                         self.players[name] = player(name)
                         break
             self.position(start)
+        print("—"*76)
         self.print_game(True, False)
         self.print_c()
+        print("—"*76)
     def position(self,start=False):
         print("\n######################\nPositions in the game:\n######################")
         self.print_game()
@@ -200,12 +205,14 @@ class CamelUp():
                                     string="#"*(len(header_statement)+2*4),
                                     width = total_width)
         self.rendered_output[0]+= "—"*total_width
+        local_center_design = self.center_design+[]
+        local_center_design[8] = local_center_design[8].format(VOI=self.VOI)
         for row_n in range(5):
             for column_n in range(5):
                 if row_n in [1,2,3] and column_n in [1,2,3]:
                     if column_n ==1:
                         for render_row in range(row_n*6,row_n*6+6):
-                            self.rendered_output[render_row+1]+=self.center_design[render_row-6]
+                            self.rendered_output[render_row+1]+=local_center_design[render_row-6]
                     continue
                 field_n = self.field_structure[row_n][column_n]
                 field_n_content = copy.deepcopy(self.game_field[field_n])
@@ -410,6 +417,10 @@ class CamelUp():
         else:
             self.game_field[field].extend(moving_camels)
     def value_of_information_increase(self,VOI):
+        '''
+        This function is a bit buggy, interpretation needs to be added for this.
+        
+        '''
         AVG_inf     = 0
         iterations  = 0
         for i in self.Camels:
@@ -467,12 +478,19 @@ class CamelUp():
         for i in range(len(start_field)):
             if "OASIS" in start_field[i] or "DESERT" in start_field[i]:
                 payoff[str(i+1)] = 0
-        first,second,payoff,n_paths = \
+        ## payoffs and win probabilities might be available already from previous calculation.
+        if self.rec:
+            first,second,payoff,n_paths = \
             self.flexible_for(liste = Camels_die, #list of camels that haven't moved
                               field= start_field, # current field of play
                               first= first, # 
                               second= second, #
                               payoff= payoff) #
+            self.game_first = first; self.game_second = second;
+            self.game_payoff = payoff; self.game_n_paths = n_paths;
+        else:
+            first,second,payoff,n_paths = \
+                self.game_first, self.game_second, self.game_payoff, self.game_n_paths
         #payoff:
         self.win_prob = {}
         self.sec_prob = {}
@@ -494,9 +512,9 @@ class CamelUp():
             if self.ret[i]>=1:
                 VOI+=self.ret[i]
         if len(self.moved)<4:
-            dVOI = self.value_of_information_increase(VOI)
+            self.VOI = self.value_of_information_increase(VOI)
         else:
-            dVOI = 1
+            self.VOI = 1
         if print_option:
             self.print_game(False,True)
         for i in self.players.keys():
@@ -516,13 +534,17 @@ class CamelUp():
                 for j in self.players[i].inventory:
                     if j != "Diced":
                         players_inventory.append([j,i])
-            #determine position of players desert/oasis fields
+            ## determine position of players desert/oasis fields
             pos = None
             if player in self.players.keys():
                 pos = self.players[player].plate_pos
-            #determine value of withdrawls
+            ## determine value of withdrawls
+            # if self.rec:
             fields = self._desert_iterator(player)
-            # iterate over results of desert iterator:
+            # self.fields = fields|{}
+            # else:
+            #     fields = self.fields|{}
+            ## iterate over results of desert iterator:
             for i in fields.keys():
                 if "W" in i:
                     value = 0
@@ -597,11 +619,33 @@ class CamelUp():
             field[step].extend(moving_camels)
         # print(field)
         return field,hit
-    def _desert_iterator(self,player): #simulate for deserts
+    def _desert_iterator(self,player): 
+        '''
+        !!! Testing may be required to improve the performance here and make sure nothing computes 
+        more than once.
+        
+        This function simulates the game for the value of the desert and oasis fields.
+        Problem:
+            Withdrawel of the desert or oasis fields is only possible for the current player
+            and with his own plate. 
+            Calculation at once for all of these withdrawels might not be necessary.
+            Maybe safe a per player dictionary of values of withdrawel.
+
+        Parameters
+        ----------
+        player : TYPE
+            Player as reference. 
+
+        Returns
+        -------
+        fields: dict
+            Potential fields to place desert or oasis on.
+
+        '''
+        # import pdb; pdb.set_trace()
         first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
         second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
-        pass
-        # look for valuable fields for deserts
+        ## look for valuable fields for deserts
         field = self.game_field + []
         W_field = "xxx"
         j = 0 # count the maximum field
@@ -622,70 +666,89 @@ class CamelUp():
             if field[j] != []:
                 if field[j][0] in self.Camels:
                     Camels += len(field[j])
-        end = min(16,j+4) #last field that makes sense to put the plate on is j+3
-        # determine Camels not yet moved:
+        ## last field that makes sense to put the plate on is j+3 up to number 16
+        end = min(16,j+4) 
+        ## determine Camels not yet moved:
         Camels_die = [camel for camel in self.Camels if camel not in self.moved]
         payoff = {} 
         for i in range(len(field)):
             if "OASIS" in field[i] or "DESERT" in field[i]:
                 payoff[str(i+1)] = 0
-        OASISfirst, OASISsecond, OASISpayoff, OASISnpaths = \
-            self.flexible_for(Camels_die,
-                              field+[],
-                              {**first,**{}},
-                              {**second,**{}},
-                              {**payoff,**{}})
-        for i in OASISpayoff.keys():
-            OASISpayoff[i]=OASISpayoff[i]/OASISnpaths
+        ## field with removed oasis and desert value and or with plain field as is.
+        if self.rec: 
+            self.players_removal = {}
+            fields = {}
+        else:
+            fields = self.game_fields|{}
         OASISret = {} #new oasis fields evaluation dictionary
-        for i in self.Camels: 
-            for k in [5,3,2]:
-                OASISret[i+" ["+str(k)+"]"] = \
-                    ((k+1)*OASISfirst[i]+2*OASISsecond[i]-OASISnpaths)/OASISnpaths
-        fields = {}
-        fields[W_field] = [OASISpayoff,OASISret]
-        for j in range(start,end):
-            if len(field[j]) == 0 or "DESERT" in field[j] or "OASIS" in field[j]:
-                if not ("OASIS" in field[j-1] or "OASIS" in field[j+1] or\
-                    "DESERT" in field[j-1] or "DESERT" in field[j+1]):
-                    field[j] = ["OASIS",player]
-                    payoff = {}
-                    for i in range(len(field)):
-                        if "OASIS" in field[i] or "DESERT" in field[i]:
-                            payoff[str(i+1)] = 0
-                    OASISfirst, OASISsecond, OASISpayoff, OASISnpaths = \
-                        self.flexible_for(Camels_die,copy.deepcopy(field),\
-                                          copy.deepcopy(first),copy.deepcopy(second),\
-                                          copy.deepcopy(payoff))
-                    field[j] = ["DESERT",player]
-                    payoff = {}
-                    for i in range(len(field)):
-                        if "OASIS" in field[i] or "DESERT" in field[i]:
-                            payoff[str(i+1)] = 0
-                    DESERTfirst, DESERTsecond, DESERTpayoff, DESERTnpaths = \
-                        self.flexible_for(Camels_die,copy.deepcopy(field),\
-                                          copy.deepcopy(first),copy.deepcopy(second),\
-                                          copy.deepcopy(payoff))
-                    for i in OASISpayoff.keys():
-                        OASISpayoff[i]=OASISpayoff[i]/OASISnpaths
-                    OASISret = {}
-                    for i in self.Camels: 
-                        for k in [5,3,2]:
-                            OASISret[i+" ["+str(k)+"]"] = \
-                                ((k+1)*OASISfirst[i]+2*OASISsecond[i]-OASISnpaths)/OASISnpaths
-                    fields[str(j+1)+"O"] = [OASISpayoff,OASISret]
-                    for i in DESERTpayoff.keys():
-                        DESERTpayoff[i]=DESERTpayoff[i]/DESERTnpaths
-                    DESERTret = {}
-                    for i in self.Camels: 
-                        for k in [5,3,2]:
-                            DESERTret[i+" ["+str(k)+"]"] = \
-                                ((k+1)*DESERTfirst[i]+2*DESERTsecond[i]-DESERTnpaths)/DESERTnpaths
-                    fields[str(j+1)+"D"] = [DESERTpayoff,DESERTret]
-                    # special case for testing: put in expected payoff
-                    if self.game_field[j] == []:
-                        field[j] = []
-                    
+        if W_field!= "xxx":
+            if player not in self.players_removal.keys():
+                removedFirst, removedSecond, removedPayoff, removedNpaths = \
+                    self.flexible_for(Camels_die,
+                                      field+[],
+                                      {**first,**{}},
+                                      {**second,**{}},
+                                      {**payoff,**{}})
+                for i in removedPayoff.keys():
+                    removedPayoff[i]=removedPayoff[i]/removedNpaths
+                self.players_removal[player] = {
+                    "first":removedFirst,"second":removedSecond,"payoff":removedPayoff,
+                    "npaths":removedNpaths}
+            else:
+                removedFirst = self.players_removal[player]["first"]
+                removedSecond= self.players_removal[player]["second"]
+                removedPayoff= self.players_removal[player]["payoff"]
+                removedNpaths= self.players_removal[player]["npaths"]
+                
+            for i in self.Camels: 
+                for k in [5,3,2]:
+                    OASISret[i+" ["+str(k)+"]"] = \
+                        ((k+1)*removedFirst[i]+2*removedSecond[i]-removedNpaths)/removedNpaths
+            fields[W_field] = [removedPayoff,OASISret]
+        if self.rec:
+            field = self.game_field + []
+            for j in range(start,end):
+                if len(field[j]) == 0 or "DESERT" in field[j] or "OASIS" in field[j]:
+                    if not ("OASIS" in field[j-1] or "OASIS" in field[j+1] or\
+                        "DESERT" in field[j-1] or "DESERT" in field[j+1]):
+                        field[j] = ["OASIS",player]
+                        payoff = {}
+                        for i in range(len(field)):
+                            if "OASIS" in field[i] or "DESERT" in field[i]:
+                                payoff[str(i+1)] = 0
+                        OASISfirst, OASISsecond, OASISpayoff, OASISnpaths = \
+                            self.flexible_for(Camels_die,copy.deepcopy(field),\
+                                              copy.deepcopy(first),copy.deepcopy(second),\
+                                              copy.deepcopy(payoff))
+                        field[j] = ["DESERT",player]
+                        payoff = {}
+                        for i in range(len(field)):
+                            if "OASIS" in field[i] or "DESERT" in field[i]:
+                                payoff[str(i+1)] = 0
+                        DESERTfirst, DESERTsecond, DESERTpayoff, DESERTnpaths = \
+                            self.flexible_for(Camels_die,copy.deepcopy(field),\
+                                              copy.deepcopy(first),copy.deepcopy(second),\
+                                              copy.deepcopy(payoff))
+                        for i in OASISpayoff.keys():
+                            OASISpayoff[i]=OASISpayoff[i]/OASISnpaths
+                        OASISret = {}
+                        for i in self.Camels: 
+                            for k in [5,3,2]:
+                                OASISret[i+" ["+str(k)+"]"] = \
+                                    ((k+1)*OASISfirst[i]+2*OASISsecond[i]-OASISnpaths)/OASISnpaths
+                        fields[str(j+1)+"O"] = [OASISpayoff,OASISret]
+                        for i in DESERTpayoff.keys():
+                            DESERTpayoff[i]=DESERTpayoff[i]/DESERTnpaths
+                        DESERTret = {}
+                        for i in self.Camels: 
+                            for k in [5,3,2]:
+                                DESERTret[i+" ["+str(k)+"]"] = \
+                                    ((k+1)*DESERTfirst[i]+2*DESERTsecond[i]-DESERTnpaths)/DESERTnpaths
+                        fields[str(j+1)+"D"] = [DESERTpayoff,DESERTret]
+                        # special case for testing: put in expected payoff
+                        if self.game_field[j] == []:
+                            field[j] = []
+        self.game_fields = fields|{}    
         return fields # dictionary of potential plate fields: returns and their payoff matrix
     def rank(self,field):
         ranks = []
@@ -694,6 +757,101 @@ class CamelUp():
                 ranks.extend(i)
         return ranks
     # @numba.njit # currently won't work. rewrite without using dictionaries
+    def new_flexible_for(self,moves,camels,field,payoffs):
+        '''
+        
+
+        Parameters
+        ----------
+        moves : TYPE
+            DESCRIPTION.
+        camels : TYPE
+            DESCRIPTION.
+        field : TYPE
+            DESCRIPTION.
+        payoffs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        results : TYPE
+            DESCRIPTION.
+        
+        --------
+        Testing:
+        --------
+            
+            payoff = {} 
+            for i in range(len(CCS2.game_field)):
+                if "OASIS" in CCS2.game_field[i] or "DESERT" in CCS2.game_field[i]:
+                    payoff[str(i+1)] = 0
+        
+            a_time = time.time()
+            results = CCS2.new_flexible_for(
+                [],
+                [camel for camel in CCS2.Camels if camel not in CCS2.moved],
+                CCS2.game_field + [],
+                payoff
+                )
+            print(time.time()-a_time)
+        '''
+        # import pdb; pdb.set_trace()
+        self.counter = 0
+        self.counter_limit = 29160
+        for i in range(int(len(moves)/2)):
+            self.counter_limit/=(5-i)*3
+        self.jobs = []
+        self.results = []
+        for camel in camels:
+            camels_copy = copy.deepcopy(camels)
+            camels_copy.remove(camel)
+            self.jobs.append([moves,camel,camels_copy,field,payoffs])
+        threads = []
+        for worker in range(self.parallel_workers):
+            threads.append(th.Thread(target=self.new_flexible_for_worker))
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        # results = pd.DataFrame(self.results,columns=[
+        #     *[x for xs in [["Camel{:d}".format(i),"Move{:d}".format(i)] for i in range(1,6)] for x in xs],
+        #     "weight","second","first",*payoffs.keys()])
+        return self.results
+    def new_flexible_for_worker(self):
+        time_waited = 0
+        while self.counter < self.counter_limit:
+            if len(self.jobs)==0:
+                time.sleep(.005)
+                time_waited += .005
+                if time_waited>=5:
+                    return
+                continue
+            time_waited = 0
+            moves,camel,camels,field,hits = self.jobs.pop()
+            for j in range(1,4):
+                moves_copy = copy.deepcopy(moves) +[camel,j]
+                hits_copy = copy.deepcopy(hits)
+                camels_copy = copy.deepcopy(camels)
+                field1 = copy.deepcopy(field)
+                field2,hit = self.move_simulation(field1, camel,j)
+                if len(hit.values())>0:
+                    key = list(hit.keys())[0]
+                    hits_copy[key]+=1
+                if len([*field2[16],*field2[17],*field2[18]]) > 0 or\
+                    len(camels_copy) == 0:
+                    ranks = self.rank(field2)
+                    factor = np.prod([i*3 for i in range(1,1+len(camels_copy))])
+                    self.counter+=factor
+                    self.results.append([
+                        *moves_copy,*["",0]*(len(camels_copy)),
+                        factor,*ranks[-2:],*hits_copy.values()])
+                else:
+                    for camel2 in camels_copy:
+                        camels_copy2 = camels_copy+[]
+                        camels_copy2.remove(camel2)
+                        self.jobs.append([moves_copy,camel2,camels_copy2,field2,hits])
+                
+    
     def flexible_for(self,liste,field,first,second,payoff):
         '''
         This function simulates the paths for the moves of the camels 
@@ -721,7 +879,25 @@ class CamelUp():
             See Parameters.
         n_paths: int
             See Parameters.
-
+            
+        --------
+        Testing:
+        --------
+        
+            payoff = {} 
+            for i in range(len(CCS2.game_field)):
+                if "OASIS" in CCS2.game_field[i] or "DESERT" in CCS2.game_field[i]:
+                    payoff[str(i+1)] = 0
+        
+            a_time = time.time()
+            first,second,payoff,npaths =   CCS2.flexible_for(
+                [camel for camel in CCS2.Camels if camel not in CCS2.moved],
+                CCS2.game_field + [],
+                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
+                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
+                payoff)
+            print(time.time()-a_time)
+            
         '''
         if len(liste) > 1:
             npaths = 0
@@ -764,6 +940,29 @@ class CamelUp():
             first[ranks[-1]]+=1
             second[ranks[-2]]+=1
             return first,second,payoff,1
+    def flexible_for2(self, liste:list, field, first:dict, second:dict, n_paths:int):
+        pass
+    def sub_unit(self,liste,field,first,second,payoff,npaths):    
+        i = self.sub_tasks.pop()
+        liste_2 = copy.deepcopy(liste)
+        del liste_2[i]
+        for j in range(1,4):
+            field1 = copy.deepcopy(field)
+            field2,hit = self.move_simulation(field1, liste[i],j)
+            if len([*field2[16],*field2[17],*field2[18]]) > 0:
+                ranks = self.rank(field2)
+                first[ranks[-1]]+=1*3**(len(liste)-1)
+                second[ranks[-2]]+=1*3**(len(liste)-1)
+                if len(hit.values())>0:
+                    key = list(hit.keys())[0]
+                    payoff[key]+=hit[key]
+                npaths += 1*3**(len(liste)-1)
+                continue
+            first,second,payoff,n_paths1 = self.flexible_for(liste_2,field2,first,second,payoff)
+            if len(hit.values())>0:
+                key = list(hit.keys())[0]
+                payoff[key]+=hit[key]*n_paths1
+            npaths += n_paths1
     def die_r(self):
         moving = []
         for i in self.Camels:
@@ -897,8 +1096,7 @@ class CamelUp():
                 break
             if i not in self.moved:
                 CNM+=print_adj(i,8,"l")+", "
-        if self.rec:
-            self.one_turn(print_option=False,OD=True,player=player)
+        self.one_turn(print_option=False,OD=True,player=player)
         self.print_game(True, True) # prints game with field and payoffs and player gains
         self.print_i()
         self.print_c()
@@ -978,9 +1176,9 @@ class CamelUp():
                         break
             else:
                 print(move +" is not a legal move. Check Choices!")
-        # if move in ["o","d","w","r","t"]:
-        #     self.rec=True
-        self.rec=True
+        if move in ["o","d","w","r","t"]:
+            self.rec=True
+        # self.rec=True
 
 
 
@@ -1010,7 +1208,7 @@ class player(): #for simulation
 
 
 
-from BT_f import print_adj, print_hint2
+from BT_utils import print_adj, print_hint2
 
 
 
@@ -1027,17 +1225,18 @@ class Field():
     def __repr__(self):
         pass
                     
-demo_players = {"Eike":player("Eike"),"Batti":player("Batti"),"Mom":player("Mom"),"Dad":player("Dad")}
+demo_players = {"Player 1":player("Player 1"),"Player 2":player("Player 2"),
+                "Player 3":player("Player 3"),"Player 4":player("Player 4")}
 demo3_players = {"Eike":player("Eike"),"Mom":player("Mom"),"Dad":player("Dad")}
 
 demoE = Field([[], [], [], [], [], [], [], [], [], ['White'], ['Blue'], [], ['Orange'], [],
                ['Yellow', 'Green'], [], [], [], []],copy.deepcopy(demo_players))
 
-demo1 = Field([[], [], [], [], [], ['White','Blue','Orange'], ['DESERT', 'Dad'], ['Yellow', 'Green'], 
-               ['DESERT', 'Eike'], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo_players))
+demo1 = Field([[], [], [], [], [], ['White','Blue','Orange'], ['DESERT', 'Player 4'], ['Yellow', 'Green'], 
+               ['DESERT', 'Player 1'], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo_players))
 
-demoS2 = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], ['DESERT', 'Eike'], [],
-               ['DESERT', 'Dad'], [], [], [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo_players))
+demoS2 = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], ['DESERT', 'Player 1'], [],
+               ['DESERT', 'Player 4'], [], [], [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo_players))
 
 demo3 = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], [], [], [], [], [], 
                [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo3_players))
