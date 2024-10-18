@@ -1227,7 +1227,7 @@ class Field():
                     
 demo_players = {"Player 1":player("Player 1"),"Player 2":player("Player 2"),
                 "Player 3":player("Player 3"),"Player 4":player("Player 4")}
-demo3_players = {"Eike":player("Eike"),"Mom":player("Mom"),"Dad":player("Dad")}
+demo3_players = {"Michael":player("Micheal"),"Dwight":player("Dwight"),"Jim":player("Jim")}
 
 demoE = Field([[], [], [], [], [], [], [], [], [], ['White'], ['Blue'], [], ['Orange'], [],
                ['Yellow', 'Green'], [], [], [], []],copy.deepcopy(demo_players))
