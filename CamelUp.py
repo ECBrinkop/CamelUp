@@ -7,6 +7,7 @@ Created on Mon Jan  4 11:07:12 2021
 import copy, time
 from random import randrange
 import numpy as np, threading as th, pandas as pd
+import numba as nb
 
 class CamelUp():
     '''
@@ -851,7 +852,7 @@ class CamelUp():
                         camels_copy2.remove(camel2)
                         self.jobs.append([moves_copy,camel2,camels_copy2,field2,hits])
                 
-    
+    @nb.njit()
     def flexible_for(self,liste,field,first,second,payoff):
         '''
         This function simulates the paths for the moves of the camels 
@@ -1114,6 +1115,7 @@ class CamelUp():
         #                     random="r",oasis="o, d, w", 
         #                     final="f",exit_s="exit"))
         while True:
+            print("Move t for throw a camel, r for random throw, o or d or w for desert, oasis, [Camel] for bet, f for final bet")
             move = input()
             if move == "t":
                 print("Which camel?")
@@ -1252,6 +1254,13 @@ CC3 = CamelUp(4,field = demo3)
 CCS2 = CamelUp(4,field = demoS2)
 
 
+dublin_players = {"Holly":player("Holly"),"Eike":player("Eike"),"Fredrik":player("Fredrik"),
+                  "Joaquin":player("Joaquin")}
+
+dublin_field = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], [], [], [], [], [], 
+                      [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(dublin_players))
+
+CC_dublin = CamelUp(4,field = dublin_field)
 
 
 """
@@ -1311,7 +1320,7 @@ Center Design
 """
 
 
-
+print()
 
 
 
