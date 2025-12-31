@@ -8,6 +8,7 @@ import copy, time
 from random import randrange
 import numpy as np, threading as th, pandas as pd
 import numba as nb
+from utils import print_header as print_hint2, print_adj
 
 class CamelUp():
     '''
@@ -1184,9 +1185,6 @@ class CamelUp():
 
 
 
-
-
-
 class player(): #for simulation
     def __init__(self,name):
         while name in CamelUp.Camels:
@@ -1205,12 +1203,6 @@ class player(): #for simulation
         self.expected_payoff = 0
         self.plate_pos = None
 
-
-
-
-
-
-from BT_utils import print_adj, print_hint2
 
 
 
