@@ -1183,6 +1183,15 @@ class CamelUp():
             self.rec=True
         # self.rec=True
 
+def render_field(Field):
+    rendered_field = np.zeros((len(Field.game_field),5))
+    for i in range(len(Field.game_field)):
+        for j in range(len(Field.game_field[i])):
+            if Field.game_field[i][j] not in ["OASIS","DESERT"]:
+                rendered_field[i,j] = 1
+            else:
+                rendered_field[i,j] = 2
+    return rendered_field
 
 
 class player(): #for simulation
@@ -1218,42 +1227,6 @@ class Field():
         self.moved = moved
     def __repr__(self):
         pass
-                    
-demo_players = {"Player 1":player("Player 1"),"Player 2":player("Player 2"),
-                "Player 3":player("Player 3"),"Player 4":player("Player 4")}
-demo3_players = {"Michael":player("Micheal"),"Dwight":player("Dwight"),"Jim":player("Jim")}
-
-demoE = Field([[], [], [], [], [], [], [], [], [], ['White'], ['Blue'], [], ['Orange'], [],
-               ['Yellow', 'Green'], [], [], [], []],copy.deepcopy(demo_players))
-
-demo1 = Field([[], [], [], [], [], ['White','Blue','Orange'], ['DESERT', 'Player 4'], ['Yellow', 'Green'], 
-               ['DESERT', 'Player 1'], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo_players))
-
-demoS2 = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], ['DESERT', 'Player 1'], [],
-               ['DESERT', 'Player 4'], [], [], [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo_players))
-
-demo3 = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], [], [], [], [], [], 
-               [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo3_players))
-
-demoS = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], [], [], [], [], [], 
-               [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(demo_players))
-
-
-CC1 = CamelUp(4,field = demo1)
-CC = CamelUp(4,field = demoE)
-CCS = CamelUp(4,field = demoS)
-CC3 = CamelUp(4,field = demo3)
-CCS2 = CamelUp(4,field = demoS2)
-
-
-dublin_players = {"Holly":player("Holly"),"Eike":player("Eike"),"Fredrik":player("Fredrik"),
-                  "Joaquin":player("Joaquin")}
-
-dublin_field = Field([['White','Blue'], ['Yellow', 'Green'], ['Orange'], [], [], [], [], [], 
-                      [], [], [], [], [], [], [], [], [], [], []],copy.deepcopy(dublin_players))
-
-CC_dublin = CamelUp(4,field = dublin_field)
-
 
 """
 Field Design
