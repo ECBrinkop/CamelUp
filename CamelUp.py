@@ -1184,13 +1184,20 @@ class CamelUp():
         # self.rec=True
 
 def render_field(Field):
-    rendered_field = np.zeros((len(Field.game_field),5))
+    mask_players = {name: i for i, name in enumerate(Field.players.keys())}
+    mask = {"White":0,"Blue":1,"Orange":2,"Yellow":3,"Green":4, "White":5, "Black":6} ## mask used to map field for numba acceleration
+    for player_name, idx in mask_players.items():
+        mask["DESERT"+player_name] = 7 + idx*2
+        mask["OASIS"+player_name] = 8 + idx*2
+
+    rendered_field = np.zeros((len(Field.game_field),7))
     for i in range(len(Field.game_field)):
-        for j in range(len(Field.game_field[i])):
-            if Field.game_field[i][j] not in ["OASIS","DESERT"]:
-                rendered_field[i,j] = 1
+        if len(Field.game_field[i]) > 0:
+            if Field.game_field[i][0] in ["DESERT","OASIS"]:
+                rendered_field[i,0] = mask[Field.game_field[i][0]+Field.game_field[i][1]]
             else:
-                rendered_field[i,j] = 2
+                for j in range(len(Field.game_field[i])):
+                    rendered_field[i,j] = mask[Field.game_field[i][j]]
     return rendered_field
 
 
