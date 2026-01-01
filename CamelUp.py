@@ -656,21 +656,32 @@ class CamelUp():
                 W_field = "W"+str(i+1)
                 field[i] = []
                 break
-        for i in field:
-            if i != []:
-                if i[0] in self.Camels:
-                    start = j+1 #minimum field is the field after the first camel
-                    Camels = len(i)
-                    break
-            j+=1
-        while Camels < 5:
-            j+=1
-            if field[j] != []:
-                if field[j][0] in self.Camels:
-                    Camels += len(field[j])
-        ## last field that makes sense to put the plate on is j+3 up to number 16
-        end = min(16,j+4) 
-        ## determine Camels not yet moved:
+
+        Camels = 0
+        camel_found = False
+        Camel_distance = [0] * 16
+        for i in range(16):
+            if field[i]==[]:
+                distance +=1
+            if set(field[i]) & set(self.Camels[:5]) and not camel_found:
+                camel_found = True
+                distance = 0
+                Camel_distance[i] = distance
+            elif camel_found:
+                distance += 1
+                Camel_distance[i] = distance
+        if len(self.Camels) > 5:
+            camel_found = False
+            for i in range(15,-1,-1):
+                if field[i] == ["black"] or field[i] == ["white"] and not camel_found:
+                    camel_found = True
+                    distance = 0
+                    Camel_distance[i] = min(distance,Camel_distance[i])
+                elif camel_found:
+                    distance += 1
+                    Camel_distance[i] = min(distance,Camel_distance[i])
+        legal_fields = [idx for idx,distance in enumerate(Camel_distance) if distance > 0 and distance < 5]
+
         Camels_die = [camel for camel in self.Camels if camel not in self.moved]
         payoff = {} 
         for i in range(len(field)):
@@ -853,7 +864,6 @@ class CamelUp():
                         camels_copy2.remove(camel2)
                         self.jobs.append([moves_copy,camel2,camels_copy2,field2,hits])
                 
-    @nb.njit()
     def flexible_for(self,liste,field,first,second,payoff):
         '''
         This function simulates the paths for the moves of the camels 
@@ -1190,7 +1200,7 @@ def render_field(Field):
         mask["DESERT"+player_name] = 7 + idx*2
         mask["OASIS"+player_name] = 8 + idx*2
 
-    rendered_field = np.zeros((len(Field.game_field),7))
+    rendered_field = np.zeros((len(Field.game_field),7),dtype=int)
     for i in range(len(Field.game_field)):
         if len(Field.game_field[i]) > 0:
             if Field.game_field[i][0] in ["DESERT","OASIS"]:
@@ -1199,6 +1209,97 @@ def render_field(Field):
                 for j in range(len(Field.game_field[i])):
                     rendered_field[i,j] = mask[Field.game_field[i][j]]
     return rendered_field
+
+@nb.njit()
+def sim_all_moves(rendered_field:np.ndarray):
+    #def flexible_for(self,liste,field,first,second,payoff):
+        '''
+        This function simulates the paths for the moves of the camels 
+
+        Parameters
+        ----------
+        liste : list
+            Camels that still move.
+        field : list of lists
+            Current field.
+        first : dict of len 5
+            DESCRIPTION.
+        second : dict of len 5
+            DESCRIPTION.
+        payoff : dict
+            DESCRIPTION.
+
+        Returns
+        -------
+        first : TYPE
+            See Parameters.
+        second : TYPE
+            See Parameters.
+        payoff : TYPE
+            See Parameters.
+        n_paths: int
+            See Parameters.
+            
+        --------
+        Testing:
+        --------
+        
+            payoff = {} 
+            for i in range(len(CCS2.game_field)):
+                if "OASIS" in CCS2.game_field[i] or "DESERT" in CCS2.game_field[i]:
+                    payoff[str(i+1)] = 0
+        
+            a_time = time.time()
+            first,second,payoff,npaths =   CCS2.flexible_for(
+                [camel for camel in CCS2.Camels if camel not in CCS2.moved],
+                CCS2.game_field + [],
+                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
+                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
+                payoff)
+            print(time.time()-a_time)
+            
+        '''
+        if len(liste) > 1:
+            npaths = 0
+            for i in range(len(liste)):
+                liste_2 = copy.deepcopy(liste)
+                del liste_2[i]
+                for j in range(1,4):
+                    field1 = copy.deepcopy(field)
+                    field2,hit = self.move_simulation(field1, liste[i],j)
+                    if len([*field2[16],*field2[17],*field2[18]]) > 0:
+                        ranks = self.rank(field2)
+                        first[ranks[-1]]+=1*3**(len(liste)-1)
+                        second[ranks[-2]]+=1*3**(len(liste)-1)
+                        if len(hit.values())>0:
+                            key = list(hit.keys())[0]
+                            payoff[key]+=hit[key]
+                        npaths += 1*3**(len(liste)-1)
+                        continue
+                    first,second,payoff,n_paths1 = self.flexible_for(liste_2,field2,first,second,payoff)
+                    if len(hit.values())>0:
+                        key = list(hit.keys())[0]
+                        payoff[key]+=hit[key]*n_paths1
+                    npaths += n_paths1
+            return first,second,payoff,npaths
+        elif len(liste) == 1:
+            npaths = 0
+            for i in range(1,4):
+                field1 = copy.deepcopy(field)
+                field2,hit = self.move_simulation(field1,liste[0],i)
+                ranks = self.rank(field2)
+                first[ranks[-1]]+=1
+                second[ranks[-2]]+=1
+                if len(hit.values())>0:
+                    key = list(hit.keys())[0]
+                    payoff[key]+=hit[key]
+                npaths += 1
+            return first,second,payoff,npaths
+        else:
+            ranks = self.rank(field)
+            first[ranks[-1]]+=1
+            second[ranks[-2]]+=1
+            return first,second,payoff,1
 
 
 class player(): #for simulation
