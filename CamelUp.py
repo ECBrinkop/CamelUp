@@ -1254,10 +1254,10 @@ def sim_all_moves(rendered_field:np.ndarray, camels_thrown:list[str], camels_not
 
 class player(): #for simulation
     def __init__(self,name):
-        while name in CamelUp.Camels:
+        while name in CamelUp.standard_Camels:
             print("ILLEGAL PLAYER NAME! Can't be Camel Name! Retry:")
             name = input()
-        self.cards = copy.deepcopy(CamelUp.Camels)
+        self.cards = copy.deepcopy(CamelUp.standard_Camels)
         self.name = name
         self.coins = 3
         self.inventory = []
@@ -1274,7 +1274,7 @@ class player(): #for simulation
 
 
 class Field():
-    Camels = CamelUp.Camels
+    Camels = CamelUp.standard_Camels + ["Black", "White"]
     def __init__(self,field=[],players=[],moved=[]):
         self.game_field = field
         self.players = players
