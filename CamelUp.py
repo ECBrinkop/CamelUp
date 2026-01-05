@@ -1337,7 +1337,51 @@ Center Design
 ———————————————————————————————————————
 """
 
+f'''
+New Field Design (7 Camels)
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+║      xyz----zyx      ║              <16>                < 1>              < 2>            ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║      <15>                                                < 3>      ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║   <14>                                                       < 4>  ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+═════════════════════════                                                                  ═════════════════════════
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║   <13>                                                       < 5>  ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+═════════════════════════                                                                  ═════════════════════════
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║   <12>                                                       < 6>  ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║      <11>                                                < 7>      ║      xyz----zyx      ║
+║      xyz----zyx      ║                                                                    ║      xyz----zyx      ║
+║      xyz----zyx      ║              <10>                < 9>              < 8>            ║      xyz----zyx      ║
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║      xyz----zyx      ║
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
+'''
 print()
 
 
