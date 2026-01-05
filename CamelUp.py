@@ -9,6 +9,7 @@ from random import randrange
 import numpy as np, threading as th, pandas as pd
 import numba as nb
 from utils import print_header as print_hint2, print_adj
+import itertools
 
 class CamelUp():
     '''
@@ -32,10 +33,10 @@ class CamelUp():
             Betting Plates for each of the Camels
     '''
     gap_margin = 5
-    Camels = ["Yellow","Blue","Green","Orange","White"]
-    Inventory = [] # contains 
-    for i in Camels:
-        Inventory.extend([i+" [5]",i+" [3]",i+" [2]"])
+    standard_Camels = ["Yellow","Blue","Green","Orange","White"]
+    standard_Inventory = [] # contains 
+    for i in standard_Camels:
+        standard_Inventory.extend([i+" [5]",i+" [3]",i+" [2]"])
     field_structure = [[14,15,0,1,2],
                        [13,None,None,None,3],
                        [12,None,None,None,4],
@@ -66,7 +67,15 @@ class CamelUp():
                  n_players:int,
                  start:bool = True,
                  field = "",
-                 tutorial=True):
+                 tutorial=True,
+                 black_white= False):
+        self.black_white = black_white
+        self.Camels = copy.deepcopy(self.standard_Camels)
+        self.Inventory = copy.deepcopy(self.standard_Inventory)
+        if self.black_white:
+            self.Camels.append("Black")
+            self.Camels.append("White")
+            self.Inventory.extend([f"{i} [2]" for i in self.standard_Camels])
         self.total_width = (5*self.render_field_cell_width+6)
         self.rec = True
         self.tutorial=tutorial
@@ -1210,96 +1219,37 @@ def render_field(Field):
                     rendered_field[i,j] = mask[Field.game_field[i][j]]
     return rendered_field
 
+
 @nb.njit()
-def sim_all_moves(rendered_field:np.ndarray):
-    #def flexible_for(self,liste,field,first,second,payoff):
-        '''
-        This function simulates the paths for the moves of the camels 
+def sim_all_moves(rendered_field:np.ndarray, camels_thrown:list[str], camels_not_thrown:list[str]):
+    '''
+    This function simulates the paths for the moves of the camels
+    Parameters
+    ----------
+    rendered_field: np.ndarray
+        The rendered field, returned by the render_field function.
+    camels_thrown: list[str]
+        Camels that have been thrown. Information needed to simulate properly.
+    camels_not_thrown: list[str]
+        Camels that have not been thrown. Information needed to simulate properly and to infer game version.
+    
+    Returns
+    -------
+    probabilities: array of shape (5,3)
+        Probabilities of the camels to end up in the first, second, third and lower positions.
+        The first dimension is the camel, the second dimension is the position.
+    payoffs: array of shape (x,2)
+        Positions and hits for all desert and oasis fields.
+    '''
+    draw_n_camels = len(camels_not_thrown)
+    if len(camels_thrown) + len(camels_not_thrown) > 5:
+        draw_n_camels -= 1
+    ## sanity check return for no camels left to move:
+    if draw_n_camels == 0:
+        return np.array([[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]), np.array([])
+    ## generate all possible paths for the camels that have been thrown
+    all_paths = list(itertools.product(range(1,4), repeat=len(camels_not_thrown)))
 
-        Parameters
-        ----------
-        liste : list
-            Camels that still move.
-        field : list of lists
-            Current field.
-        first : dict of len 5
-            DESCRIPTION.
-        second : dict of len 5
-            DESCRIPTION.
-        payoff : dict
-            DESCRIPTION.
-
-        Returns
-        -------
-        first : TYPE
-            See Parameters.
-        second : TYPE
-            See Parameters.
-        payoff : TYPE
-            See Parameters.
-        n_paths: int
-            See Parameters.
-            
-        --------
-        Testing:
-        --------
-        
-            payoff = {} 
-            for i in range(len(CCS2.game_field)):
-                if "OASIS" in CCS2.game_field[i] or "DESERT" in CCS2.game_field[i]:
-                    payoff[str(i+1)] = 0
-        
-            a_time = time.time()
-            first,second,payoff,npaths =   CCS2.flexible_for(
-                [camel for camel in CCS2.Camels if camel not in CCS2.moved],
-                CCS2.game_field + [],
-                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
-                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
-                payoff)
-            print(time.time()-a_time)
-            
-        '''
-        if len(liste) > 1:
-            npaths = 0
-            for i in range(len(liste)):
-                liste_2 = copy.deepcopy(liste)
-                del liste_2[i]
-                for j in range(1,4):
-                    field1 = copy.deepcopy(field)
-                    field2,hit = self.move_simulation(field1, liste[i],j)
-                    if len([*field2[16],*field2[17],*field2[18]]) > 0:
-                        ranks = self.rank(field2)
-                        first[ranks[-1]]+=1*3**(len(liste)-1)
-                        second[ranks[-2]]+=1*3**(len(liste)-1)
-                        if len(hit.values())>0:
-                            key = list(hit.keys())[0]
-                            payoff[key]+=hit[key]
-                        npaths += 1*3**(len(liste)-1)
-                        continue
-                    first,second,payoff,n_paths1 = self.flexible_for(liste_2,field2,first,second,payoff)
-                    if len(hit.values())>0:
-                        key = list(hit.keys())[0]
-                        payoff[key]+=hit[key]*n_paths1
-                    npaths += n_paths1
-            return first,second,payoff,npaths
-        elif len(liste) == 1:
-            npaths = 0
-            for i in range(1,4):
-                field1 = copy.deepcopy(field)
-                field2,hit = self.move_simulation(field1,liste[0],i)
-                ranks = self.rank(field2)
-                first[ranks[-1]]+=1
-                second[ranks[-2]]+=1
-                if len(hit.values())>0:
-                    key = list(hit.keys())[0]
-                    payoff[key]+=hit[key]
-                npaths += 1
-            return first,second,payoff,npaths
-        else:
-            ranks = self.rank(field)
-            first[ranks[-1]]+=1
-            second[ranks[-2]]+=1
-            return first,second,payoff,1
 
 
 class player(): #for simulation
