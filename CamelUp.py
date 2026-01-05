@@ -1026,6 +1026,56 @@ def render_field(Field):
     inv_player_mask = {v: k for k, v in player_mask.items()}
     return rendered_field, inv_player_mask
 
+## helper function to generate all dice permutations
+@nb.njit(cache=True)
+def _all_dice_permutations(draw_n_camels):
+    n_dice_rolls = 3**draw_n_camels
+    dice_rolls = np.zeros((n_dice_rolls,draw_n_camels),dtype=np.int64)
+    for i in range(n_dice_rolls):
+        for j in range(draw_n_camels):
+            dice_rolls[i,j] = (i // (3**j)) % 3 + 1
+    return dice_rolls
+
+@nb.njit(cache=True)
+def _all_camel_permutations(camels_not_thrown: np.ndarray):
+    """
+    Generates all possible orders (permutations) to draw camels_not_thrown without replacement.
+    Uses a standard algorithm since Numba does not support itertools.permutations.
+    """
+    n_camels_not_thrown = len(camels_not_thrown)
+    out_size = 1
+    for i in range(2, n_camels_not_thrown + 1):
+        out_size *= i
+    result = np.empty((out_size, n_camels_not_thrown), dtype=np.int64)
+    a = camels_not_thrown; n=n_camels_not_thrown; 
+    c = np.zeros(n, dtype=np.int64)
+
+    result[0] = a
+    idx = 1
+
+    i = 0
+    while i < n:
+        if c[i] < i:
+            if i % 2 == 0:
+                tmp = a[0]
+                a[0] = a[i]
+                a[i] = tmp
+            else:
+                tmp = a[c[i]]
+                a[c[i]] = a[i]
+                a[i] = tmp
+
+            result[idx] = a
+            idx += 1
+
+            c[i] += 1
+            i = 0
+        else:
+            c[i] = 0
+            i += 1
+    return result
+
+
 
 @nb.njit(cache=True, parallel=True)
 def sim_all_moves(
