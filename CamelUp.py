@@ -10,6 +10,7 @@ import numpy as np, threading as th, pandas as pd
 import numba as nb
 from utils import print_header as print_hint2, print_adj
 import itertools
+import time
 
 class CamelUp():
     '''
@@ -28,12 +29,12 @@ class CamelUp():
     
     Class lists include:
         Camels: 
-            5 Camels (White, Blue, Orange, Green, Yellow)
+            5 Camels (Purple, Blue, Orange, Green, Yellow)
         Inventory:
             Betting Plates for each of the Camels
     '''
     gap_margin = 5
-    standard_Camels = ["Yellow","Blue","Green","Orange","White"]
+    standard_Camels = ["Yellow","Blue","Green","Orange","Purple"]
     standard_Inventory = [] # contains 
     for i in standard_Camels:
         standard_Inventory.extend([i+" [5]",i+" [3]",i+" [2]"])
@@ -442,8 +443,8 @@ class CamelUp():
                         if "OASIS" in self.game_field[k] or "DESERT" in self.game_field[k]:
                             payoff[str(k+1)] = 0
                     npaths = 0
-                    first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
-                    second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
+                    first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
+                    second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
                     # print(i+" "+str(j))
                     field,hit = self.move_simulation(copy.deepcopy(self.game_field), i,j)
                     if len([*field[16],*field[17],*field[18]]) > 0:
@@ -476,8 +477,8 @@ class CamelUp():
         '''
         This function manages all the payoffs
         '''
-        first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
-        second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
+        first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
+        second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
         # determine camels that haven't moved:
         Camels_die = copy.deepcopy(self.Camels)
         for i in self.moved:
@@ -654,8 +655,8 @@ class CamelUp():
 
         '''
         # import pdb; pdb.set_trace()
-        first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
-        second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0}
+        first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
+        second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
         ## look for valuable fields for deserts
         field = self.game_field + []
         W_field = "xxx"
@@ -682,7 +683,7 @@ class CamelUp():
         if len(self.Camels) > 5:
             camel_found = False
             for i in range(15,-1,-1):
-                if field[i] == ["black"] or field[i] == ["white"] and not camel_found:
+                if field[i] == ["Black"] or field[i] == ["White"] and not camel_found:
                     camel_found = True
                     distance = 0
                     Camel_distance[i] = min(distance,Camel_distance[i])
@@ -914,8 +915,8 @@ class CamelUp():
             first,second,payoff,npaths =   CCS2.flexible_for(
                 [camel for camel in CCS2.Camels if camel not in CCS2.moved],
                 CCS2.game_field + [],
-                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
-                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"White":0},
+                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0},
+                {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0},
                 payoff)
             print(time.time()-a_time)
             
@@ -1203,10 +1204,10 @@ class CamelUp():
         # self.rec=True
 
 def render_field(Field):
-    player_mask = {name: i for i, name in enumerate(Field.players.keys())}
-    mask = {"White":0,"Blue":1,"Orange":2,"Yellow":3,"Green":4, "White":5, "Black":6} ## mask used to map field for numba acceleration
-    mask["DESERT"] = 7
-    mask["OASIS"] = 8
+    player_mask = {name: i+10 for i, name in enumerate(Field.players.keys())}
+    mask = {"Purple":1,"Blue":2,"Orange":3,"Yellow":4,"Green":5, "White":6, "Black":7} ## mask used to map field for numba acceleration
+    mask["DESERT"] = 8
+    mask["OASIS"] = 9
 
     rendered_field = np.zeros((len(Field.game_field),7),dtype=int)
     for i in range(len(Field.game_field)):
@@ -1217,22 +1218,29 @@ def render_field(Field):
             else:
                 for j in range(len(Field.game_field[i])):
                     rendered_field[i,j] = mask[Field.game_field[i][j]]
-    return rendered_field
+    # Invert the player_mask dictionary to map back from plate payoffs to player names later
+    inv_player_mask = {v: k for k, v in player_mask.items()}
+    return rendered_field, inv_player_mask
 
 
-@nb.njit()
-def sim_all_moves(rendered_field:np.ndarray, camels_thrown:list[str], camels_not_thrown:list[str]):
+@nb.njit(cache=True, parallel=True)
+def sim_all_moves(
+    rendered_field:np.ndarray, n_players:int, n_camels_thrown:int, 
+    camels_not_thrown:list[int], verbose:bool = True
+       ):
     '''
     This function simulates the paths for the moves of the camels
     Parameters
     ----------
     rendered_field: np.ndarray
         The rendered field, returned by the render_field function.
-    camels_thrown: list[str]
-        Camels that have been thrown. Information needed to simulate properly.
-    camels_not_thrown: list[str]
+    n_players: int
+        Number of players in the game.
+    n_camels_thrown: int
+        Number of camels that have been thrown.
+    camels_not_thrown: list[int]
         Camels that have not been thrown. Information needed to simulate properly and to infer game version.
-    
+
     Returns
     -------
     probabilities: array of shape (5,3)
@@ -1241,14 +1249,147 @@ def sim_all_moves(rendered_field:np.ndarray, camels_thrown:list[str], camels_not
     payoffs: array of shape (x,2)
         Positions and hits for all desert and oasis fields.
     '''
+
+    len_all_camels = n_camels_thrown + len(camels_not_thrown)
     draw_n_camels = len(camels_not_thrown)
-    if len(camels_thrown) + len(camels_not_thrown) > 5:
+    if len_all_camels > 5:
         draw_n_camels -= 1
-    ## sanity check return for no camels left to move:
-    if draw_n_camels == 0:
-        return np.array([[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]]), np.array([])
-    ## generate all possible paths for the camels that have been thrown
-    all_paths = list(itertools.product(range(1,4), repeat=len(camels_not_thrown)))
+    # Another early exit for <=0 camels to move
+    if draw_n_camels <= 0:
+        if verbose:
+            print("No more camels can be drawn (draw_n_camels == 0).")
+        return np.zeros((5, 3), dtype=np.int64), np.zeros((n_players, 1), dtype=np.int64)
+
+    all_dice_permutations = _all_dice_permutations(draw_n_camels)
+    # Generate all possible permutations of camels_not_thrown (numba friendly: i.e., as lists of integer arrays)
+    # (This is separate from all_dice_permutations, which is all product/dice rolls)
+    camel_permutations = _all_camel_permutations(np.array(camels_not_thrown, dtype=np.int64))
+
+    if verbose:
+        print("draw_n_camels: ", draw_n_camels)
+        print("Number of paths: ", len(all_dice_permutations), "first 5 paths: ", all_dice_permutations[:5], "SHOULD number of paths", 3**draw_n_camels)
+        print("Number of permutations: ", len(camel_permutations), "first 5 permutations:", camel_permutations[:5], "should permutations")
+
+    ## include white camel as well as black camel:
+    if 6 in camels_not_thrown:
+        camels_not_thrown.remove(6)
+        camels_not_thrown.append(7)
+        all_camel_permutations = np.concatenate((camel_permutations, _all_camel_permutations(np.array(camels_not_thrown, dtype=np.int64))), axis=0)
+        camels_not_thrown.remove(7)
+        camels_not_thrown.append(6)
+    else:
+        all_camel_permutations = camel_permutations
+
+    if verbose:
+        print("Number of full permutations: ", all_camel_permutations.shape[0]*all_dice_permutations.shape[0])
+
+    camel_row_idx_base = np.zeros(8,dtype=np.int64)
+    camel_col_idx_base = np.zeros(8,dtype=np.int64)
+    if 6 in camels_not_thrown:
+        for i in range(1,8):
+            pos = np.argwhere(rendered_field == i)
+            camel_row_idx_base[i] = pos[0][0]
+            camel_col_idx_base[i] = pos[0][1]
+    else:
+        for i in range(1,6):
+            pos = np.argwhere(rendered_field == i)
+            camel_row_idx_base[i] = pos[0][0]
+            camel_col_idx_base[i] = pos[0][1]
+
+    n_perm = len(all_camel_permutations)
+
+    positions_local = np.zeros((n_perm, 5, 3), dtype=np.int64)
+    DO_hits_local   = np.zeros((n_perm, n_players, 1), dtype=np.int64)
+
+    ## path simulation
+    for camel_order_idx in nb.prange(len(all_camel_permutations)):
+        camel_order = all_camel_permutations[camel_order_idx]
+        for dice_rolls in all_dice_permutations:
+            ##create field copy
+            field_copy = rendered_field.copy()
+
+            camel_row_idx = camel_row_idx_base.copy()
+            camel_col_idx = camel_col_idx_base.copy()
+
+            for move_idx in range(len(dice_rolls)):
+                move = dice_rolls[move_idx]
+                camel = camel_order[move_idx]
+                ## find camel in field_copy
+                row = camel_row_idx[camel]
+                col = camel_col_idx[camel]
+                # Extract the stack as a vector (all nonzero from (row, col) to (row, end))
+                # Optimized: slice out directly using numpy for speed (all leading nonzero, so from col to first 0 or end)
+                # Directly operate on the field_copy row to avoid extra reference
+                end = (field_copy[row] != 0).sum()
+
+                stack = field_copy[row, col:end].copy().reshape(1, -1)
+                # Zero out in-place
+                field_copy[row, col:end] = 0
+
+                ## move camel
+                below_target = False
+                if camel not in [6,7]:
+                    target_field = row + move
+                    if field_copy[target_field,0] == 8:
+                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        target_field -= 1
+                        below_target = True
+                    elif field_copy[target_field,0] == 9:
+                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        target_field += 1
+                else:
+                    target_field = row - move
+                    if field_copy[target_field,0] == 8:
+                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        target_field += 1
+                        below_target = True
+                    elif field_copy[target_field,0] == 9:
+                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        target_field -= 1
+
+                ##place camel on or below target
+                #print(stack,field_copy[target_field,:-stack.shape[1]].reshape(1,-1))
+                if below_target:
+                    #field_copy[target_field, :] = np.concatenate((stack, field_copy[target_field, :-stack.shape[1]].reshape(1, -1)), axis=1)
+                    stack_len = stack.shape[1]
+
+                    # shift existing camels right
+                    for j in range(6, stack_len - 1, -1):
+                        field_copy[target_field, j] = field_copy[target_field, j - stack_len]
+
+                    # insert stack at front
+                    for j in range(stack_len):
+                        field_copy[target_field, j] = stack[0, j]
+                else:
+                    end_target_field = (field_copy[target_field] != 0).sum()
+                    field_copy[target_field,end_target_field:end_target_field+stack.shape[1]] = stack
+
+                for i in range(7):
+                    if field_copy[target_field,i] == 0:
+                        break
+                    else:
+                        camel = field_copy[target_field,i]
+                        camel_row_idx[camel] = target_field
+                        camel_col_idx[camel] = i                        
+
+                if target_field > 16:
+                    break
+            camel_positions = np.zeros(5)
+            ## evaluation of the path
+            for camel in range(1,6):
+                row = camel_row_idx[camel]
+                col = camel_col_idx[camel]
+                camel_positions[camel-1] = row*7+col
+            if camel_order_idx == 0 and verbose: print(camel_positions, camel_order, dice_rolls)
+            camel_ranking = np.argsort(-camel_positions.flatten())
+            positions_local[camel_order_idx, camel_ranking[0], 0] += 1
+            positions_local[camel_order_idx, camel_ranking[1], 1] += 1
+            for i in range(2,5):
+                positions_local[camel_order_idx, camel_ranking[i], 2] += 1
+
+    positions = positions_local.sum(axis=0)
+    DO_hits   = DO_hits_local.sum(axis=0)
+    return positions, DO_hits
 
 
 
