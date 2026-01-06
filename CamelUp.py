@@ -11,6 +11,7 @@ import numba as nb
 from utils import print_header as print_hint2, print_adj
 import itertools
 import time
+import random as rd
 
 class CamelUp():
     '''
@@ -182,6 +183,7 @@ class CamelUp():
                    field=True,
                    payoffs=True,
                    ):
+        ## !!! adjust for new size of game.
         self.rendered_output = [""]*self.print_dim[0]
         self.rendered_header = [""]*3
         if field:
@@ -478,6 +480,10 @@ class CamelUp():
         '''
         This function manages all the payoffs
         '''
+        if player not in self.players.keys():
+            print("Invalid player!")
+            return
+        ## !!! marker
         first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
         second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
         # determine camels that haven't moved:
@@ -521,52 +527,65 @@ class CamelUp():
 
         base_probabilities = base_positions/n_paths
         base_payoffs = np.matmul(base_probabilities, np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
-        base_payoffs = pd.DataFrame(base_payoffs, index=self.Camels[:5], columns=["5-Plate", "3-Plate", "2-Plate"])
+        #base_payoffs = pd.DataFrame(base_payoffs, index=self.Camels[:5], columns=["5-Plate", "3-Plate", "2-Plate"])
 
         ## handle desert value calculation for voi and differentials for desert plate changes
-        ## !!! markter
+        ## !!! marker
         
         desert_value = {}
-        for i in payoff.keys():
-            desert_value[i] = payoff[i]/n_paths
+        for key, value in payoff.items():
+            field_index = value["Field"]
+            desert_value[field_index] = value["Expected Payoff"]
+        ## calculate VOI base for dice rolls based on camel values above 1
+        ## !!! this might be improved by using some measure of uncertainty of camel payoffs
         VOI = 0
         for i in self.game_inventory:
-            if self.ret[i]>=1:
-                VOI+=self.ret[i]
-        if len(self.moved)<4:
+            color, number = i.split(" ")
+            number = int(number[1])
+            color_index = self.Camels.index(color)
+            number_index = [5,3,2].index(number)
+            EV_plate = base_payoffs[color_index, number_index]
+            if EV_plate>=1:
+                VOI+=EV_plate
+        if len(self.moved)<4: ## if 4 camels are moved, the voi is irrelevant
             self.VOI = self.value_of_information_increase(VOI)
         else:
             self.VOI = 1
+        
         if print_option:
             self.print_game(False,True)
+
         for i in self.players.keys():
             e_payoff = 0
             for j in self.players[i].inventory:
                 if j == "Diced":
                     e_payoff+=1
                 else:
-                    e_payoff += self.ret[j]
+                    color, number = j.split(" ")
+                    number = int(number[1])
+                    color_index = self.Camels.index(color)
+                    number_index = [5,3,2].index(number)
+                    EV_plate = base_payoffs[color_index, number_index]
+                    e_payoff += EV_plate
             if self.players[i].plate_pos != None:
-                e_payoff += desert_value[str(self.players[i].plate_pos+1)]
+                e_payoff += payoff[i]["Expected Payoff"]
             self.players[i].expected_payoff = round(e_payoff,2)
+        
+        ## Oasis and Desert value optimisation.
         if OD:
-            # classify camels on who has their plates
+            ## count number of dice rolls
             players_inventory = []
             for i in self.players.keys():
                 for j in self.players[i].inventory:
                     if j != "Diced":
                         players_inventory.append([j,i])
+            
             ## determine position of players desert/oasis fields
-            pos = None
-            if player in self.players.keys():
-                pos = self.players[player].plate_pos
-            ## determine value of withdrawls
-            # if self.rec:
+            pos = self.players[player].plate_pos
+            ## calculate desert value for player for all legal fields:
             fields = self._desert_iterator(player)
-            # self.fields = fields|{}
-            # else:
-            #     fields = self.fields|{}
-            ## iterate over results of desert iterator:
+            ## returns a dictionary of payoffs
+
             for i in fields.keys():
                 if "W" in i:
                     value = 0
@@ -641,169 +660,127 @@ class CamelUp():
             field[step].extend(moving_camels)
         # print(field)
         return field,hit
-    def _desert_iterator(self,player): 
+
+    def _desert_iterator(self,player:str): ## done, untested
         '''
-        !!! Testing may be required to improve the performance here and make sure nothing computes 
-        more than once.
-        
-        This function simulates the game for the value of the desert and oasis fields.
-        Problem:
-            Withdrawel of the desert or oasis fields is only possible for the current player
-            and with his own plate. 
-            Calculation at once for all of these withdrawels might not be necessary.
-            Maybe safe a per player dictionary of values of withdrawel.
+        This function brute forces all potential desert and oasis fields for a given player. 
+        The rule for taking these fields is: At max 4 fields in fron of any camel of the standard game. 
+        At max 3 fields behind the white and black camels in the extended game.
 
         Parameters
         ----------
-        player : TYPE
-            Player as reference. 
+        player : str
+            Player as reference, naturally must be in the players dictionary. 
 
         Returns
         -------
         fields: dict
-            Potential fields to place desert or oasis on.
+            Potential fields to place desert or oasis on. Keys are 'W' for withdrawal, and then "D" or "O" plus a field index for 
+            desert or oasis respectively. Values are a list of two arrays. The first array is the payoff matrix for the player's plate,
+            the second array is the payoff matrix for the oasis or desert field.
 
         '''
-        # import pdb; pdb.set_trace()
-        first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
-        second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
         ## look for valuable fields for deserts
         field = self.game_field + []
         W_field = "xxx"
-        j = 0 # count the maximum field
+
+        fields = {}
+        ## withdrawal field:
         for i in range(len(field)):
             if player in field[i]:
                 W_field = "W"+str(i+1)
                 field[i] = []
+                fields[W_field] = render_field(field)
                 break
 
         Camels = 0
-        camel_found = False
-        Camel_distance = [0] * 16
-        for i in range(16):
+        distance = 0
+        Camel_distance = [5] * 16
+        desert_found = False
+        for i in range(1,16):
+            distance +=1
             if field[i]==[]:
-                distance +=1
-            if set(field[i]) & set(self.Camels[:5]) and not camel_found:
-                camel_found = True
+                Camel_distance[i] = distance
+            elif desert_found:
+                Camel_distance[i] = 5
+                desert_found = False
+            elif set(field[i]) & set(self.Camels[:5]):
+                Camel_distance[i] = 5
                 distance = 0
-                Camel_distance[i] = distance
-            elif camel_found:
-                distance += 1
-                Camel_distance[i] = distance
+            elif set(field[i]) & set(["White","Black"]) and player in field[i]:
+                Camel_distance[i] = 5
+            elif set(field[i]) & set(["DESERT","OASIS"]) and not player in field[i]:
+                Camel_distance[i] = 5
+                desert_found = True
+        ## special case for extended game:
+        distance = 5; desert_found = False;
         if len(self.Camels) > 5:
-            camel_found = False
             for i in range(15,-1,-1):
-                if field[i] == ["Black"] or field[i] == ["White"] and not camel_found:
-                    camel_found = True
+                distance +=1
+                if field[i] == []:
+                    Camel_distance[i] = min(distance,Camel_distance[i])
+                elif desert_found:
+                    Camel_distance[i] = 5
+                    desert_found = False
+                elif field[i] == ["Black"] or field[i] == ["White"]:
                     distance = 0
-                    Camel_distance[i] = min(distance,Camel_distance[i])
-                elif camel_found:
-                    distance += 1
-                    Camel_distance[i] = min(distance,Camel_distance[i])
+                elif set(field[i]) & set(["DESERT","OASIS"]) and not player in field[i]:
+                    Camel_distance[i] = 5
+                    desert_found = True
+
+
         legal_fields = [idx for idx,distance in enumerate(Camel_distance) if distance > 0 and distance < 5]
 
         Camels_die = [camel for camel in self.Camels if camel not in self.moved]
-        payoff = {} 
-        for i in range(len(field)):
-            if "OASIS" in field[i] or "DESERT" in field[i]:
-                payoff[str(i+1)] = 0
-        ## field with removed oasis and desert value and or with plain field as is.
-        if self.rec: 
-            self.players_removal = {}
-            fields = {}
-        else:
-            fields = self.game_fields|{}
-        OASISret = {} #new oasis fields evaluation dictionary
-        if W_field!= "xxx":
-            if player not in self.players_removal.keys():
-                removedFirst, removedSecond, removedPayoff, removedNpaths = \
-                    self.flexible_for(Camels_die,
-                                      field+[],
-                                      {**first,**{}},
-                                      {**second,**{}},
-                                      {**payoff,**{}})
-                for i in removedPayoff.keys():
-                    removedPayoff[i]=removedPayoff[i]/removedNpaths
-                self.players_removal[player] = {
-                    "first":removedFirst,"second":removedSecond,"payoff":removedPayoff,
-                    "npaths":removedNpaths}
-            else:
-                removedFirst = self.players_removal[player]["first"]
-                removedSecond= self.players_removal[player]["second"]
-                removedPayoff= self.players_removal[player]["payoff"]
-                removedNpaths= self.players_removal[player]["npaths"]
-                
-            for i in self.Camels: 
-                for k in [5,3,2]:
-                    OASISret[i+" ["+str(k)+"]"] = \
-                        ((k+1)*removedFirst[i]+2*removedSecond[i]-removedNpaths)/removedNpaths
-            fields[W_field] = [removedPayoff,OASISret]
-        if self.rec:
-            field = self.game_field + []
-            for j in range(start,end):
-                if len(field[j]) == 0 or "DESERT" in field[j] or "OASIS" in field[j]:
-                    if not ("OASIS" in field[j-1] or "OASIS" in field[j+1] or\
-                        "DESERT" in field[j-1] or "DESERT" in field[j+1]):
-                        field[j] = ["OASIS",player]
-                        payoff = {}
-                        for i in range(len(field)):
-                            if "OASIS" in field[i] or "DESERT" in field[i]:
-                                payoff[str(i+1)] = 0
-                        OASISfirst, OASISsecond, OASISpayoff, OASISnpaths = \
-                            self.flexible_for(Camels_die,copy.deepcopy(field),\
-                                              copy.deepcopy(first),copy.deepcopy(second),\
-                                              copy.deepcopy(payoff))
-                        field[j] = ["DESERT",player]
-                        payoff = {}
-                        for i in range(len(field)):
-                            if "OASIS" in field[i] or "DESERT" in field[i]:
-                                payoff[str(i+1)] = 0
-                        DESERTfirst, DESERTsecond, DESERTpayoff, DESERTnpaths = \
-                            self.flexible_for(Camels_die,copy.deepcopy(field),\
-                                              copy.deepcopy(first),copy.deepcopy(second),\
-                                              copy.deepcopy(payoff))
-                        for i in OASISpayoff.keys():
-                            OASISpayoff[i]=OASISpayoff[i]/OASISnpaths
-                        OASISret = {}
-                        for i in self.Camels: 
-                            for k in [5,3,2]:
-                                OASISret[i+" ["+str(k)+"]"] = \
-                                    ((k+1)*OASISfirst[i]+2*OASISsecond[i]-OASISnpaths)/OASISnpaths
-                        fields[str(j+1)+"O"] = [OASISpayoff,OASISret]
-                        for i in DESERTpayoff.keys():
-                            DESERTpayoff[i]=DESERTpayoff[i]/DESERTnpaths
-                        DESERTret = {}
-                        for i in self.Camels: 
-                            for k in [5,3,2]:
-                                DESERTret[i+" ["+str(k)+"]"] = \
-                                    ((k+1)*DESERTfirst[i]+2*DESERTsecond[i]-DESERTnpaths)/DESERTnpaths
-                        fields[str(j+1)+"D"] = [DESERTpayoff,DESERTret]
-                        # special case for testing: put in expected payoff
-                        if self.game_field[j] == []:
-                            field[j] = []
-        self.game_fields = fields|{}    
-        return fields # dictionary of potential plate fields: returns and their payoff matrix
-    def rank(self,field):
+
+        for i in legal_fields:
+            fields["D"+str(i)] = field.copy()
+            fields["D"+str(i)][i] = ["DESERT",player]
+            fields["D"+str(i)] = render_field(fields["D"+str(i)])
+            fields["O"+str(i)] = field.copy()
+            fields["O"+str(i)][i] = ["OASIS",player]
+            fields["O"+str(i)] = render_field(fields["O"+str(i)])
+
+        ## camels diced
+        Camels_die = [camel for camel in self.Camels if camel not in self.moved]
+        n_camels_thrown = 5-len(Camels_die)
+
+        fields_payoffs = {}
+        for i in fields.keys():
+            fields_payoffs[i] = sim_all_moves(fields[i],len(self.players),n_camels_thrown,Camels_die)
+        
+        return fields_payoffs # dictionary of potential plate fields: returns and their payoff matrix
+
+    def rank(self,field): ## DONE!
+        ## returns ranks of camels in field
         ranks = []
         for i in field:
             if "OASIS" not in i and "DESERT" not in i and len(i) > 0:
                 ranks.extend(i)
+        if "Black" in ranks: ## special case for extended game:
+            ranks.remove("Black")
+            ranks.remove("White")
         return ranks
-    def die_r(self):
+
+    def die_r(self): ## DONE!
         moving = []
         for i in self.Camels:
-            if i not in self.moved:
+            if i not in self.moved and i != "Black":
                 moving.append(i)
         camel = moving[randrange(len(moving))]
+        if camel == "White":
+            camel = rd.choice(["Black","White"])
         steps = randrange(1,4)
         lenstr = 6+7+7+1+len(camel)
         print("\n"+"#"*lenstr+"\nCamel "+camel+" moves "+str(steps)+" steps!\n"+"#"*lenstr+"\n")
         self.move(camel,steps)
-    def game_not_end(self):
+    
+    def game_not_end(self): ## DONE!
         if len([*self.game_field[16],*self.game_field[17],*self.game_field[18]]) == 0:
             return True
         else:
             return False
+
     def game(self,player = ""):
         '''
         Starts game with input as starting player.
