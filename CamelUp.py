@@ -776,12 +776,12 @@ class CamelUp():
         self.move(camel,steps)
     
     def game_not_end(self): ## DONE!
-        if len([*self.game_field[16],*self.game_field[17],*self.game_field[18]]) == 0:
+        if len(set([*self.game_field[16],*self.game_field[17],*self.game_field[18]]).difference(set(["Black","White"]))) == 0:
             return True
         else:
             return False
 
-    def game(self,player = ""):
+    def game(self,player = ""): ## DONE!
         '''
         Starts game with input as starting player.
         Manages moves by calling the make_a_move function
@@ -807,22 +807,33 @@ class CamelUp():
                 self.cl() #end of round function
             index += 1
         self.game_end() #end of game
-    def game_end(self):
+
+    def game_end(self): ## DONE!
         self.moved = self.Camels
+        if "Black" in self.moved:
+            self.moved.remove("Black")
         self.cl()
         self.print_c()
+        ## determine loser:
         for i in self.game_field:
             if i != []:
                 if i[0] not in ["OASIS","DESERT"]:
-                    loser = i[0]
-                    break
-        winner = [*self.game_field[16],*self.game_field[17],*self.game_field[18]][-1]
+                    if i not in ["Black","White"]:
+                        loser = i[0]
+                        break
+        ## determine winner:
+        winner_stack = [*self.game_field[16],*self.game_field[17],*self.game_field[18]]
+        for i in winner_stack[::-1]:
+            if i not in ["Black","White"]:
+                winner = i[0]
+                break
+
         print_hint2(loser+" lost track and is dead last!")
         j = 0
         words = ["first","second","third","fourth","fifth","sixth"]
         coins = ["8","5","3","2","1","no"]
         for i in self.game_loser:
-            if i[1] == loser:
+            if i[1] == loser and j < 5:
                 print(i[0]+" predicted the loser correctly "+words[j]+" and gets "+coins[j],end = " ")
                 if j == 0:
                     print("coins. Congratulations!")
@@ -830,16 +841,19 @@ class CamelUp():
                     print("coins.")
                 elif j == 4:
                     print("coin.")
-                if j < 5:
-                    self.players[i[0]].coins+=int(coins[j])
+                self.players[i[0]].coins+=int(coins[j])
                 j+=1
+            elif i[1] == loser and j >= 5:
+                j+=1
+                print(i[0]+f" predicted the loser correctly too late [{j}th] and loses a coin.")
+                self.players[i[0]].coins-=1
             else:
                 print(i[0]+" wrongly predicted the losing camel and loses a coin.")
                 self.players[i[0]].coins-=1
         j=0
         print_hint2(winner+" won the race!!!!")
         for i in self.game_winner:
-            if i[1] == winner:
+            if i[1] == winner and j < 5:
                 print(i[0]+" predicted the winner correctly "+words[j]+" and gets "+coins[j],end = " ")
                 if j == 0:
                     print("coins. Congratulations!")
@@ -847,12 +861,16 @@ class CamelUp():
                     print("coins.")
                 elif j == 4:
                     print("coin.")
-                if j < 5:
-                    self.players[i[0]].coins+=int(coins[j])
+                self.players[i[0]].coins+=int(coins[j])
                 j+=1
+            elif i[1] == winner and j >= 5:
+                j+=1
+                print(i[0]+f" predicted the winner correctly too late [{j}th] and loses a coin.")
+                self.players[i[0]].coins-=1
             else:
                 print(i[0]+" wrongly predicted the winning camel and loses a coin.")
                 self.players[i[0]].coins-=1
+        
         self.print_c()
         winner = []
         maxcoins = 0
@@ -869,7 +887,8 @@ class CamelUp():
             for i in range(len(winner)-1):
                 print_win+=", "+winner[i]
             print_win = print_win[2:]+" and "+winner[-1]+"!!"
-            print_hint2("The winners are "+print_win)
+            print_hint2("We have a TIE!! The winners aaaaaare "+print_win)
+
     def print_i(self):
         # print("PLATES AVAILABLE:\n")
         # print_available = ""
