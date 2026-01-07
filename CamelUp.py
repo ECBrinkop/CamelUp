@@ -356,7 +356,7 @@ class CamelUp():
             - Expected Payoffs of plates. 6x5 or 5x6
             - Coins and expected Payoffs of players up to 8x3 or 3x8.
             - Camels not diced 1x7.
-            ## 2 space between lines, 4 space if extended game is played.
+            ## 2 space between lines, 1 after odd lines, 4-3 space if extended game is played.
             - Player Inventories and expected payoffs of items in inventory. Structured list below the field.
         '''
         gap_margin = self.gap_margin
@@ -1200,7 +1200,12 @@ def sim_all_moves(
 
     n_perm = len(all_camel_permutations)
 
-    positions_local = np.zeros((n_perm, 5, 3), dtype=np.int64)
+    if len_all_camels == 6:
+        extra_dim = 3*7
+    else:
+        extra_dim = 3*5
+    
+    positions_local = np.zeros((extra_dim,n_perm, 5, 3), dtype=np.int64)
     DO_hits_local   = np.zeros((n_perm, n_players, 1), dtype=np.int64)
 
     ## path simulation
@@ -1284,14 +1289,20 @@ def sim_all_moves(
                 camel_positions[camel-1] = row*7+col
             if camel_order_idx == 0 and verbose: print(camel_positions, camel_order, dice_rolls)
             camel_ranking = np.argsort(-camel_positions.flatten())
-            positions_local[camel_order_idx, camel_ranking[0], 0] += 1
-            positions_local[camel_order_idx, camel_ranking[1], 1] += 1
+            extra_d = 3*camel_order[0] + dice_rolls[0]-3
+            positions_local[extra_d,camel_order_idx, camel_ranking[0], 0] += 1
+            positions_local[extra_d,camel_order_idx, camel_ranking[1], 1] += 1
             for i in range(2,5):
-                positions_local[camel_order_idx, camel_ranking[i], 2] += 1
+                positions_local[extra_d,camel_order_idx, camel_ranking[i], 2] += 1
 
-    positions = positions_local.sum(axis=0)
+    positions = positions_local.sum(axis=1)
+    del positions_local
+    VOI_array = np.matmul(positions, np.array([[5,3,2],[1,1,1],[-1,-1,-1]]*positions.shape[0]))
+
+    if len_all_camels == 6:
+        pass
     DO_hits   = DO_hits_local.sum(axis=0)
-    return positions, DO_hits
+    return positions, DO_hits, VOI
 
 
 
