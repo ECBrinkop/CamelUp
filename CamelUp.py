@@ -119,7 +119,7 @@ class CamelUp():
         self.game_loser = []
         self.moved = []
         self.VOI = 0
-        self.win_prob = pd.DataFrame(index=self.Camels[:5],columns=["First","Second","Lose"])
+        self.win_prob = pd.DataFrame(0.0,index=self.Camels[:5],columns=["First","Second","Lose"])
         self.game_inventory = copy.deepcopy(self.Inventory)
         self.game_field = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
         self.players = {}
@@ -227,28 +227,31 @@ class CamelUp():
     def print_game(self,
                    field=True,
                    payoffs=True,
-                   ):
-        ## !!! adjust for new size of game.
+                   ): ## DONE!
+        """
+        This function is used to print the game field and payoffs. This depends on the settings of the game.
+        """
         self.rendered_output = [""]*self.print_dim[0]
         self.rendered_header = [""]*3
         if field:
-            self.render_field()
+            self.print_render_field()
         if payoffs:
-            if self.win_prob == {}:
+            if self.win_prob.sum() == 0:
                 self.one_turn(print_option=False,OD=False,player = list(self.players.keys())[0])
-            self.render_payoffs()
-        print("\n"+"\n".join(self.rendered_header)+"\n")
-        print("\n".join(self.rendered_output))
+            self.print_render_payoffs()
+        print("\n"+"\n".join(self.rendered_header)+"\n") ## prints header that was filled in print_render_field()
+        print("\n".join(self.rendered_output)) ## prints the field that was filled in print_render_field()
         
-    def render_field(self):
-        total_width = self.total_width
-        gap_margin = self.gap_margin
-        '''
-        Renders field data into formatted output.
+    def print_render_field(self):
+        """
+        This function is used to render the game field for printing.
         Uses self.game_field and self.field_structure 
          and the natural shape of the CamelUp to render 
-         the field output into a 31x66 pixel image
-        '''
+         the field output into a 31x66 pixel(well, 31x66 characters) image if standard game is played
+         or a 41x116 pixel(41x116 characters) image if extended game is played.
+        """
+        total_width = self.total_width
+        gap_margin = self.gap_margin
         
         for row in range(len(self.rendered_output)):
             self.rendered_output[row]+=" "*gap_margin
@@ -355,7 +358,7 @@ class CamelUp():
                         self.rendered_output[render_row]+= extra_sign
                     self.rendered_output[render_row]+= field_contents[row_m]
             
-    def render_payoffs(self):    
+    def print_render_payoffs(self):    
         gap_margin = self.gap_margin
         cell_width = 10
         width = self.print_dim[1]-self.total_width
