@@ -15,8 +15,8 @@ import random as rd
 
 class CamelUp():
     '''
-    Main Class for Camel Cup calculations.
-    This class can run a game and simulate the paths in each round.
+    Main Class for Camel Cup Game Analytics.
+    This class can run a game and calculate expected payoffs for possible actions.
     ———————————————————————————————————————————————————————————————
     ———————————————————————————————————————————————————————————————
     Parameters
@@ -44,50 +44,82 @@ class CamelUp():
                        [12,None,None,None,4],
                        [11,None,None,None,5],
                        [10,9,8,7,6]]
-    center_design = ['        <16>     < 1>     < 2>        |',
-                     '   <15>                        < 3>   |',
-                     '                                      |',
-                     ' <14>                            < 4> |',
-                     '                                      |',
-                     '                                      —',
-                     '                                      |',
-                     '         Value of Information:        |',
-                     ' <13>            {VOI:5.3f}           < 5> |',
-                     '                                      |',
-                     '                                      |',
-                     '                                      —',
-                     '                                      |',
-                     ' <12>                            < 6> |',
-                     '                                      |',
-                     '   <11>                        < 7>   |',
-                     '        <10>     < 9>     < 8>        |',
-                     '———————————————————————————————————————']
-    print_dim = [31,120]
+    center_design_standard = [
+        '        <16>     < 1>     < 2>        |',
+        '   <15>                        < 3>   |',
+        '                                      |',
+        ' <14>                            < 4> |',
+        '                                      |',
+        '                                      —',
+        '                                      |',
+        '         Value of Information:        |',
+        ' <13>            {VOI:5.3f}           < 5> |',
+        '                                      |',
+        '                                      |',
+        '                                      —',
+        '                                      |',
+        ' <12>                            < 6> |',
+        '                                      |',
+        '   <11>                        < 7>   |',
+        '        <10>     < 9>     < 8>        |',
+        '———————————————————————————————————————']
+    center_design_extended = [
+        '                                                                    ',
+        '             <16>               < 1>               < 2>             ',
+        '     <15>                                                  < 3>     ',
+        '                                                                    ',
+        '                                                                    ',
+        '   <14>                                                      < 4>   ',
+        '                                                                    ',
+        '                                                                    ',
+        '                                                                    ',
+        '                                                                    ',
+        '                 ═════════════════════════════════                  ',
+        '   <13>          ║Value of Information:     {VOI:5.3f}║           < 5>   ',
+        '                 ═════════════════════════════════                  ',
+        '                                                                    ',
+        '                                                                    ',
+        '                                                                    ',
+        '                                                                    ',
+        '   <12>                                                      < 6>   ',
+        '                                                                    ',
+        '                                                                    ',
+        '     <11>                                                  < 7>     ',
+        '             <10>               < 9>               < 8>             ',
+        '                                                                    ']
+    print_dim_standard = [31,66]
+    print_dim_extended = [41,116]
     mask = {"Purple":1,"Blue":2,"Orange":3,"Yellow":4,"Green":5, "White":6, "Black":7}
-    render_field_cell_width = 12
-    parallel_workers= 8
+    render_field_cell_width_standard = 12
+    render_field_cell_width_extended = 22
     def __init__(self,
                  n_players:int,
                  start:bool = True,
                  field = "",
                  tutorial=True,
-                 black_white= False):
+                 black_white= False): ## DONE!
         self.black_white = black_white
         self.Camels = copy.deepcopy(self.standard_Camels)
         self.Inventory = copy.deepcopy(self.standard_Inventory)
+        self.render_field_cell_width = self.render_field_cell_width_standard
+        self.print_dim = self.print_dim_standard
+
+        ## settings if extended game is played
         if self.black_white:
             self.Camels.append("Black")
             self.Camels.append("White")
             self.Inventory.extend([f"{i} [2]" for i in self.standard_Camels])
+            self.render_field_cell_width = self.render_field_cell_width_extended
+            self.print_dim = self.print_dim_extended
+
         self.total_width = (5*self.render_field_cell_width+6)
-        self.rec = True
         self.tutorial=tutorial
         self.fields = {}
         self.game_winner = []
         self.game_loser = []
         self.moved = []
         self.VOI = 0
-        self.win_prob = {}
+        self.win_prob = pd.DataFrame(index=self.Camels[:5],columns=["First","Second","Lose"])
         self.game_inventory = copy.deepcopy(self.Inventory)
         self.game_field = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
         self.players = {}
@@ -108,11 +140,15 @@ class CamelUp():
                         self.players[name] = player(name)
                         break
             self.position(start)
-        print("—"*76)
+        print("—"*self.total_width)
         self.print_game(True, False)
         self.print_c()
-        print("—"*76)
-    def position(self,start=False):
+        print("—"*self.total_width)
+
+    def position(self,start=False): ## DONE!
+        """
+        This function is used to position the Camels on the field if the field is empty.
+        """
         print("\n######################\nPositions in the game:\n######################")
         self.print_game()
         for i in self.Camels:
@@ -136,6 +172,7 @@ class CamelUp():
         if start:
             for player in self.players.keys():
                 self.OasisDesert(player)
+        
     def OasisDesert(self,player,plate = ""): 
         if player not in self.players.keys():
             print("\n!!!!!!!!!!!!!!!!!!!!\nInvalid player name!\n!!!!!!!!!!!!!!!!!!!!\n")
