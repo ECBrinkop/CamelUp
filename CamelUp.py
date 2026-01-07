@@ -173,7 +173,10 @@ class CamelUp():
             for player in self.players.keys():
                 self.OasisDesert(player)
         
-    def OasisDesert(self,player,plate = ""): 
+    def OasisDesert(self,player,plate = ""): ## DONE!
+        """
+        This function is used to set the Oasis/Desert on the field for a player.
+        """
         if player not in self.players.keys():
             print("\n!!!!!!!!!!!!!!!!!!!!\nInvalid player name!\n!!!!!!!!!!!!!!!!!!!!\n")
             return 0
@@ -182,39 +185,44 @@ class CamelUp():
                 self.game_field[i] = []
                 self.players[player].plate_pos = None
                 break
-        if plate == "":
-            print(player+"'s Oasis/Desert on the field?\n 'o' for OASIS, 'd' for DESERT, "+\
-                  "anything else to WITHDRAW plate")
-            plate = input()
-        else:
-            plate = plate.capitalize()
-        if plate == "O":
-            plate = "OASIS"
-        elif plate == "D":
-            plate = "DESERT"
-        else:
-            plate = "WITHDRAW"
-        if plate in ["OASIS","DESERT","WITHDRAW"]:
-            while True:
-                if plate == "WITHDRAW":
-                    break
-                print("On which position is the "+plate+"?")
-                # self.print_game()
-                pos = int(input())-1
-                if len(self.game_field[pos]) != 0 or pos in [0,16,17,18]:
-                    print("Invalid field, retry:")
-                elif "OASIS" in self.game_field[pos-1] or "OASIS" in self.game_field[pos+1] or\
-                    "DESERT" in self.game_field[pos-1] or "DESERT" in self.game_field[pos+1]:
-                        print("Invalid field, retry!")
-                else:
-                    self.game_field[pos] = [plate,player]
-                    if str(pos+1)+"O" in self.fields.keys():
-                        if plate == "OASIS":
-                            self.game_field[pos]+=[self.fields[str(pos+1)+"O"]]
-                        else:
-                            self.game_field[pos]+=[self.fields[str(pos+1)+"D"]]
-                    self.players[player].plate_pos = pos
-                    break
+        plate = plate.capitalize()
+        while True:
+            if plate == "":
+                print(player+"'s Oasis/Desert on the field?\n 'o' for OASIS, 'd' for DESERT, "+\
+                    "'w' to WITHDRAW plate")
+                plate = input().capitalize()
+            if plate in ["O", "OASIS"]:
+                plate = "OASIS"
+                break
+            elif plate in ["D", "DESERT"]:
+                plate = "DESERT"
+                break
+            elif plate in ["W", "WITHDRAW"]:
+                plate = "WITHDRAW"
+                break
+            else:
+                print("Invalid input, retry:")
+        
+        while True:
+            if plate == "WITHDRAW":
+                break
+            print("On which position is the "+plate+"?")
+            # self.print_game()
+            pos = int(input())-1
+            if len(self.game_field[pos]) != 0 or pos in [0,16,17,18]:
+                print("Invalid field, retry:")
+            elif "OASIS" in self.game_field[pos-1] or "OASIS" in self.game_field[pos+1] or\
+                "DESERT" in self.game_field[pos-1] or "DESERT" in self.game_field[pos+1]:
+                    print("Invalid field, retry!")
+            else:
+                self.game_field[pos] = [plate,player]
+                if str(pos+1)+"O" in self.fields.keys():
+                    if plate == "OASIS":
+                        self.game_field[pos]+=[self.fields[str(pos+1)+"O"]]
+                    else:
+                        self.game_field[pos]+=[self.fields[str(pos+1)+"D"]]
+                self.players[player].plate_pos = pos
+                break
         # self.print_game()
     def print_game(self,
                    field=True,
