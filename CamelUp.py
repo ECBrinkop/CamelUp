@@ -347,8 +347,24 @@ class CamelUp():
                     self.rendered_output[render_row]+= field_contents[row_m]
             
     def print_render_payoffs(self):    
+        '''
+        Renders the payoffs for printing purposes
+        
+        The payouts are layouted to the right side of the field.
+        The elements are:
+            - Win Probabilities 4x6 or 6x4
+            - Expected Payoffs of plates. 6x5 or 5x6
+            - Coins and expected Payoffs of players up to 8x3 or 3x8.
+            - Camels not diced 1x7.
+            ## 2 space between lines, 4 space if extended game is played.
+            - Player Inventories and expected payoffs of items in inventory. Structured list below the field.
+        '''
         gap_margin = self.gap_margin
-        cell_width = 10
+        
+        payoffs_width = 20 ## this needs to be variable depending on number of players
+
+
+        
         width = self.print_dim[1]-self.total_width
         header_statement = "Win Probabilities"
         self.rendered_header[0] += "{string:^{width}s}".format(\
