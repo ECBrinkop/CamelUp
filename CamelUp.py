@@ -346,7 +346,7 @@ class CamelUp():
                         self.rendered_output[render_row]+= extra_sign
                     self.rendered_output[render_row]+= field_contents[row_m]
             
-    def print_render_payoffs(self):    
+    def print_render_payoffs(self):   
         '''
         Renders the payoffs for printing purposes
         
@@ -361,8 +361,8 @@ class CamelUp():
         '''
         gap_margin = self.gap_margin
         
-        payoffs_width = 20 ## this needs to be variable depending on number of players
-
+        payoffs_width = max(9*6,10+ sum(len(i["name"])+1 for i in self.players.values()))
+        ## !!! marker 
 
         
         width = self.print_dim[1]-self.total_width
