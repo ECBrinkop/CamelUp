@@ -64,31 +64,32 @@ class CamelUp():
         '        <10>     < 9>     < 8>        |',
         '———————————————————————————————————————']
     center_design_extended = [
-        '                                                                    ',
-        '             <16>               < 1>               < 2>             ',
-        '     <15>                                                  < 3>     ',
-        '                                                                    ',
-        '                                                                    ',
-        '   <14>                                                      < 4>   ',
-        '                                                                    ',
-        '                                                                    ',
-        '                                                                    ',
-        '                                                                    ',
-        '                 ═════════════════════════════════                  ',
-        '   <13>          ║Value of Information:     {VOI:5.3f}║           < 5>   ',
-        '                 ═════════════════════════════════                  ',
-        '                                                                    ',
-        '                                                                    ',
-        '                                                                    ',
-        '                                                                    ',
-        '   <12>                                                      < 6>   ',
-        '                                                                    ',
-        '                                                                    ',
-        '     <11>                                                  < 7>     ',
-        '             <10>               < 9>               < 8>             ',
-        '                                                                    ']
-    print_dim_standard = [31,66]
-    print_dim_extended = [41,116]
+        '                                                                    ║',
+        '             <16>               < 1>               < 2>             ║',
+        '     <15>                                                  < 3>     ║',
+        '                                                                    ║',
+        '                                                                    ║',
+        '   <14>                                                      < 4>   ║',
+        '                                                                    ║',
+        '                                                                    ═',
+        '                                                                    ║',
+        '                                                                    ║',
+        '                 ═════════════════════════════════                  ║',
+        '   <13>          ║Value of Information:     {VOI:5.3f}║           < 5>   ║',
+        '                 ═════════════════════════════════                  ║',
+        '                                                                    ║',
+        '                                                                    ║',
+        '                                                                    ═',
+        '                                                                    ║',
+        '   <12>                                                      < 6>   ║',
+        '                                                                    ║',
+        '                                                                    ║',
+        '     <11>                                                  < 7>     ║',
+        '             <10>               < 9>               < 8>             ║',
+        '                                                                    ║',
+        '═════════════════════════════════════════════════════════════════════']
+    print_dim_standard = [31,76]
+    print_dim_extended = [41,126]
     mask = {"Purple":1,"Blue":2,"Orange":3,"Yellow":4,"Green":5, "White":6, "Black":7}
     render_field_cell_width_standard = 12
     render_field_cell_width_extended = 22
@@ -242,7 +243,7 @@ class CamelUp():
         print("\n"+"\n".join(self.rendered_header)+"\n") ## prints header that was filled in print_render_field()
         print("\n".join(self.rendered_output)) ## prints the field that was filled in print_render_field()
         
-    def print_render_field(self):
+    def print_render_field(self): ## DONE! pending testing
         """
         This function is used to render the game field for printing.
         Uses self.game_field and self.field_structure 
@@ -251,110 +252,97 @@ class CamelUp():
          or a 41x116 pixel(41x116 characters) image if extended game is played.
         """
         total_width = self.total_width
-        gap_margin = self.gap_margin
+        gap_margin = self.gap_margin ## margin to left side for printing
         
+        ## add margins to left side for printing for the field and the header
         for row in range(len(self.rendered_output)):
             self.rendered_output[row]+=" "*gap_margin
         for row in range(len(self.rendered_header)):
             self.rendered_header[row]+=" "*gap_margin
-        header_statement = "Current Field"
+        
+        ## header rendering
+        header_statement = "Current Field" ## header statement for the field
         self.rendered_header[0] += "{string:^{width}s}".format(\
                                     string="#"*(len(header_statement)+2*4),
-                                    width = total_width)
+                                    width = total_width-18) ## central header directly above field for all 3 rows
         self.rendered_header[1] += "{string:^{width}s}".format(\
                                     string="##  "+header_statement+"  ##",
-                                    width = total_width)
+                                    width = total_width-18)
         self.rendered_header[2] += "{string:^{width}s}".format(\
                                     string="#"*(len(header_statement)+2*4),
-                                    width = total_width)
-        self.rendered_output[0]+= "—"*total_width
+                                    width = total_width-18)
+
+        ## field rendering
+        vertical_sign = "|" if self.black_white else "║"
+        horizontal_sign = "—" if self.black_white else "═"
+        self.rendered_output[0]+= horizontal_sign*total_width
         local_center_design = self.center_design+[]
-        local_center_design[8] = local_center_design[8].format(VOI=self.VOI)
+        ## format VOI into field center depending on game mode
+        if self.black_white:
+            local_center_design[8] = local_center_design[8].format(VOI=self.VOI)
+        else:
+            local_center_design[11] = local_center_design[11].format(VOI=self.VOI)
+        n_rows_cells = 5 if not self.black_white else 7 ## number of rows in a cell in the field depending on game mode
+        ## iterate over printing field cells
         for row_n in range(5):
             for column_n in range(5):
                 if row_n in [1,2,3] and column_n in [1,2,3]:
                     if column_n ==1:
-                        for render_row in range(row_n*6,row_n*6+6):
-                            self.rendered_output[render_row+1]+=local_center_design[render_row-6]
+                        for render_row in range(row_n*(n_rows_cells+1),row_n*(n_rows_cells+1)+n_rows_cells+1):
+                            self.rendered_output[render_row+1]+=local_center_design[render_row-(n_rows_cells+1)]
                     continue
-                field_n = self.field_structure[row_n][column_n]
+                field_n = self.field_structure[row_n][column_n] ## get field number
                 field_n_content = copy.deepcopy(self.game_field[field_n])
-                field_contents = [" "*self.render_field_cell_width+"|"]*5+\
-                    ["—"*(self.render_field_cell_width+1)]
-                if str(field_n+1)+"O" in self.fields.keys() or\
-                    str(field_n+1)+"D" in self.fields.keys():
-                        if field_n_content == []:
-                            field_n_content = ["(DESERT)",self.fields[str(field_n+1)+"D"],
-                                               "(OASIS)",self.fields[str(field_n+1)+"O"]]
-                        elif field_n_content[0] in ["DESERT","OASIS"]:
-                            field_n_content +=[np.nan,"",""]
-                            if field_n_content[0] == "OASIS":
-                                field_n_content[2]  = self.fields[str(field_n+1)+"O"]
-                                field_n_content[3]  = "({string:.2f})".\
-                                    format(string=self.fields[str(field_n+1)+"D"])
-                            else:
-                                field_n_content[2]  = self.fields[str(field_n+1)+"D"]
-                                field_n_content[3]  = "({string:.2f})".\
-                                    format(string=self.fields[str(field_n+1)+"O"])
-                            if "W"+str(field_n+1) in self.fields.keys():
-                                field_n_content[4]  = "(({string:.2f}))".\
-                                    format(string=self.fields["W"+str(field_n+1)])
+                field_contents = [" "*self.render_field_cell_width+vertical_sign]*n_rows_cells+\
+                    [horizontal_sign*(self.render_field_cell_width+1)]
+                if "O"+str(field_n+1) in self.fields.keys() or\
+                    "D"+str(field_n+1) in self.fields.keys():
+                    if field_n_content == []:
+                        field_n_content = ["(DESERT)",self.fields["D"+str(field_n+1)],
+                                            "(OASIS)",self.fields["O"+str(field_n+1)]]
+                    elif field_n_content[0] in ["DESERT","OASIS"]:
+                        field_n_content +=[np.nan,"",""]
+                        if field_n_content[0] == "OASIS":
+                            field_n_content[2]  = self.fields["O"+str(field_n+1)]
+                            field_n_content[3]  = "({string:.2f})".\
+                                format(string=self.fields["D"+str(field_n+1)])
+                        else:
+                            field_n_content[2]  = self.fields["D"+str(field_n+1)]
+                            field_n_content[3]  = "({string:.2f})".\
+                                format(string=self.fields["O"+str(field_n+1)])
+                        if "W"+str(field_n+1) in self.fields.keys():
+                            field_n_content[4]  = "(({string:.2f}))".\
+                                format(string=self.fields["W"+str(field_n+1)]) ## TODO: check if this is correct
+                    while len(field_n_content) < n_rows_cells: ##elongate the cell for the content to fit in the cell
+                        field_n_content.append("")
+                        if len(field_n_content) < n_rows_cells:
+                            field_n_content.insert(0,"")
+                ## contents are rendereded for each cell row
                 if field_n_content == []:
                     pass
-                elif field_n_content[0] in ["DESERT","OASIS"]:
-                    field_contents[0] = "{string:^{width}s}|".\
-                        format(string=field_n_content[0],
-                               width=self.render_field_cell_width)
-                    field_contents[1] = "{string:^{width}s}|".\
-                        format(string=field_n_content[1],
-                               width=self.render_field_cell_width)
-                    if len(field_n_content)>2:
-                        field_contents[2] = "{string:^{fill}{width}f}|".\
-                            format(string=field_n_content[2],fill=" ",
-                                   width=str(self.render_field_cell_width)+".2")
-                    if len(field_n_content)>3:
-                        field_contents[3] = "{string:^{width}s}|".\
-                            format(string=field_n_content[3],
-                                   width=str(self.render_field_cell_width))
-                    if len(field_n_content)>3:
-                        field_contents[4] = "{string:^{width}s}|".\
-                            format(string=field_n_content[4],
-                                   width=str(self.render_field_cell_width))        
-                elif field_n_content[0] == "(DESERT)":
-                    field_contents[1] = "{string:^{width}s}|".\
-                        format(string=field_n_content[0],
-                               width=self.render_field_cell_width)
-                    field_contents[2] = "{string:^{fill}{width}f}|".\
-                            format(string=field_n_content[1],fill=" ",
-                                   width=str(self.render_field_cell_width)+".2")
-                    field_contents[3] = "{string:^{width}s}|".\
-                        format(string=field_n_content[2],
-                               width=str(self.render_field_cell_width))
-                    field_contents[4] = "{string:^{fill}{width}f}|".\
-                            format(string=field_n_content[3],fill=" ",
-                                   width=str(self.render_field_cell_width)+".2")
+                elif field_n_content[0] in ["DESERT","OASIS", "(DESERT)"]:
+                    for i in range(len(field_n_content)):
+                        field_contents[i] = f"{field_n_content[i]:^{self.render_field_cell_width}s}{vertical_sign}"
                 else:
-                    start = 2-len(field_n_content)//2
-                    for row_o in range(start,start+len(field_n_content)):
-                        # print(field_contents,
-                        #       start,
-                        #       row_o,
-                        #       field_n_content[start-row_o-1],
-                        #       self.render_field_cell_width)
-                        if field_n_content[start-row_o-1] in self.moved:
-                            field_contents[row_o] = "{string:^{width}s}|".\
-                                    format(string="["+field_n_content[start-row_o-1]+"]",
-                                           width=self.render_field_cell_width)
+                    for row_o in range(len(field_n_content)):
+                        if not self.black_white and field_n_content[row_o] == "Purple":
+                            field_n_content[row_o] = "White"
+                        if field_n_content[row_o] in self.moved or field_n_content[row_o] == "Black" and "White" in self.moved:
+                            field_contents[row_o] = f"[{field_n_content[row_o]:^{self.render_field_cell_width-2}s}]{vertical_sign}"
                         else:
-                            field_contents[row_o] = "{string:^{width}s}|".\
-                                    format(string=field_n_content[start-row_o-1],
-                                           width=self.render_field_cell_width)
-                for row_m in range(6):
-                    render_row = row_m+row_n*6+1
+                            field_contents[row_o] = f"{field_n_content[row_o]:^{self.render_field_cell_width}s}{vertical_sign}"
+
+                while len(field_n_content) < n_rows_cells: ##elongate the cell for the content to fit in the cell
+                    field_n_content.append("")
+                    if len(field_n_content) < n_rows_cells:
+                        field_n_content.insert(0,"")
+                field_contents = field_contents + [horizontal_sign*(self.render_field_cell_width)]
+                for row_m in range(n_rows_cells+1):
+                    render_row = row_m+row_n*(n_rows_cells+1)+1
                     if column_n == 0:
-                        extra_sign = "|"
-                        if row_m == 5:
-                            extra_sign = "—"
+                        extra_sign = vertical_sign
+                        if row_m == n_rows_cells:
+                            extra_sign = horizontal_sign
                         self.rendered_output[render_row]+= extra_sign
                     self.rendered_output[render_row]+= field_contents[row_m]
             
