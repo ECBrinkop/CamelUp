@@ -1228,7 +1228,7 @@ def sim_all_moves(
     else:
         extra_dim = 3*5
     
-    positions_local = np.zeros((extra_dim,n_perm, 5, 3), dtype=np.int64)
+    positions_local = np.zeros((extra_dim,n_perm, 5, 3), dtype=np.float64)
     DO_hits_local   = np.zeros((n_perm, n_players, 1), dtype=np.int64)
 
     ## path simulation
@@ -1319,30 +1319,37 @@ def sim_all_moves(
                 positions_local[extra_d,camel_order_idx, camel_ranking[i], 2] += 1
 
     positions = positions_local.sum(axis=1)
-    del positions_local
+    #del positions_local
     
-    game_inventory_multiplier = np.tile(game_inventory_matrix, (positions.shape[0],1,1))
+    game_inventory_multiplier = np.empty((positions.shape[0], game_inventory_matrix.shape[0], game_inventory_matrix.shape[1]))
+    for i in range(positions.shape[0]):
+        game_inventory_multiplier[i] = game_inventory_matrix
 
     ## calculate the number of paths for each first element (color+die result)
     n_paths = positions.sum(axis = 2)[:,0]
 
     ## for each path first element, calculate the VOI
-    VOI_array = np.matmul(
-        positions * (1/n_paths)[:, np.newaxis, np.newaxis], 
-        np.tile([[5,3,2],[1,1,1],[-1,-1,-1]], (positions.shape[0],1)).reshape(positions.shape[0],3,3))
+    #score_matrix = np.array([[5,3,2],[1,1,1],[-1,-1,-1]])
+    ## Manually expand score_matrix to shape (positions.shape[0], 3, 3)
+    #score_matrix_expand = np.broadcast_to(score_matrix, (positions.shape[0], 3, 3))
+    #VOI_array = np.matmul(
+    #    positions * (1/n_paths)[:, np.newaxis, np.newaxis], 
+    #    score_matrix_expand
+    #)
+    VOI_array = compute_voi_array(positions)
+
     VOI_array[VOI_array<1] = 0 ## only count payoff elements with expected value > 1
     VOI_array = VOI_array * game_inventory_multiplier
     next_voi = VOI_array.sum(axis = (1,2)) ## sum up the VOI for each path first element
-    del VOI_array
+    #del VOI_array
 
     VOI_array_now  = np.matmul(
         (positions).sum(axis = 0)/n_paths.sum(),
-        np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
-    #print(VOI_array_now)
+        np.array([[5,3,2],[1,1,1],[-1,-1,-1]]),dtype=np.float64)
     VOI_array_now[VOI_array_now<1] = 0
     VOI_array_now = VOI_array_now*game_inventory_matrix
     now_voi  = VOI_array_now.sum()
-    del VOI_array_now
+    #del VOI_array_now
 
     VOI = ((next_voi - now_voi)*n_paths).sum()/n_paths.sum()
 
@@ -1350,7 +1357,30 @@ def sim_all_moves(
 
     return positions, DO_hits, VOI
 
+@nb.njit
+def compute_voi_array(positions):
+    n = positions.shape[0]
+    VOI = np.zeros((n, 3, 3), dtype=np.float64)
 
+    score = np.array([[5.0, 3.0, 2.0],
+                      [1.0, 1.0, 1.0],
+                      [-1.0, -1.0, -1.0]])
+
+    for i in nb.prange(n):
+        n_paths = positions[i, :, :].sum()
+        if n_paths == 0:
+            continue
+
+        inv_n = 1.0 / n_paths
+
+        for r in range(3):
+            for c in range(3):
+                s = 0.0
+                for k in range(3):
+                    s += positions[i, r, k] * inv_n * score[k, c]
+                VOI[i, r, c] = s
+
+    return VOI
 
 class player(): #for simulation
     def __init__(self,name):
