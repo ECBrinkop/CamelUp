@@ -1183,7 +1183,7 @@ def sim_all_moves(
     if draw_n_camels <= 0:
         if verbose:
             print("No more camels can be drawn (draw_n_camels == 0).")
-        return np.zeros((5, 3), dtype=np.int64), np.zeros((n_players, 3), dtype=np.int64)
+        return np.zeros((5, 3), dtype=np.float64), np.zeros((n_players, 3), dtype=np.int64), 0.0
 
     all_dice_permutations = _all_dice_permutations(draw_n_camels)
     # Generate all possible permutations of camels_not_thrown (numba friendly: i.e., as lists of integer arrays)
@@ -1228,12 +1228,15 @@ def sim_all_moves(
     else:
         extra_dim = 3*5
     
-    positions_local = np.zeros((extra_dim,n_perm, 5, 3), dtype=np.float64)
-    DO_hits_local   = np.zeros((n_perm, n_players, 1), dtype=np.int64)
+    n_threads = nb.get_num_threads()
+    positions_local = np.zeros((extra_dim,n_threads, 5, 3), dtype=np.float64)
+    DO_hits_local   = np.zeros((n_threads, n_players, 1), dtype=np.int64)
 
     ## path simulation
     for camel_order_idx in nb.prange(len(all_camel_permutations)):
         camel_order = all_camel_permutations[camel_order_idx]
+        tid = nb.get_thread_id()
+        
         for dice_rolls in all_dice_permutations:
             ##create field copy
             field_copy = rendered_field.copy()
@@ -1261,20 +1264,21 @@ def sim_all_moves(
                 if camel not in [6,7]:
                     target_field = row + move
                     if field_copy[target_field,0] == 8:
-                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
+                        #local_DO_hits[field_copy[target_field,1]-10, 0] += 1
                         target_field -= 1
                         below_target = True
                     elif field_copy[target_field,0] == 9:
-                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
                         target_field += 1
                 else:
                     target_field = row - move
                     if field_copy[target_field,0] == 8:
-                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
                         target_field += 1
                         below_target = True
                     elif field_copy[target_field,0] == 9:
-                        DO_hits_local[camel_order_idx, field_copy[target_field,1]-10, 0] += 1
+                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
                         target_field -= 1
 
                 ##place camel on or below target
@@ -1312,14 +1316,21 @@ def sim_all_moves(
                 camel_positions[camel-1] = row*7+col
             if camel_order_idx == 0 and verbose: print(camel_positions, camel_order, dice_rolls)
             camel_ranking = np.argsort(-camel_positions.flatten())
+
             extra_d = 3*camel_order[0] + dice_rolls[0]-3
-            positions_local[extra_d,camel_order_idx, camel_ranking[0], 0] += 1
-            positions_local[extra_d,camel_order_idx, camel_ranking[1], 1] += 1
+            
+            #local_positions[extra_d, camel_ranking[0], 0] += 1
+            #local_positions[extra_d, camel_ranking[1], 1] += 1
+            #for i in range(2,5):
+            #    local_positions[extra_d, camel_ranking[i], 2] += 1
+            
+            positions_local[extra_d,tid, camel_ranking[0], 0] += 1
+            positions_local[extra_d,tid, camel_ranking[1], 1] += 1
             for i in range(2,5):
-                positions_local[extra_d,camel_order_idx, camel_ranking[i], 2] += 1
+                positions_local[extra_d,tid, camel_ranking[i], 2] += 1
 
     positions = positions_local.sum(axis=1)
-    #del positions_local
+    DO_hits = DO_hits_local.sum(axis=0)
     
     game_inventory_multiplier = np.empty((positions.shape[0], game_inventory_matrix.shape[0], game_inventory_matrix.shape[1]))
     for i in range(positions.shape[0]):
@@ -1327,40 +1338,41 @@ def sim_all_moves(
 
     ## calculate the number of paths for each first element (color+die result)
     n_paths = positions.sum(axis = 2)[:,0]
-
-    ## for each path first element, calculate the VOI
-    #score_matrix = np.array([[5,3,2],[1,1,1],[-1,-1,-1]])
-    ## Manually expand score_matrix to shape (positions.shape[0], 3, 3)
-    #score_matrix_expand = np.broadcast_to(score_matrix, (positions.shape[0], 3, 3))
-    #VOI_array = np.matmul(
-    #    positions * (1/n_paths)[:, np.newaxis, np.newaxis], 
-    #    score_matrix_expand
-    #)
+    
     VOI_array = compute_voi_array(positions)
 
-    VOI_array[VOI_array<1] = 0 ## only count payoff elements with expected value > 1
+    #VOI_array[VOI_array<1] = 0 ## only count payoff elements with expected value > 1
     VOI_array = VOI_array * game_inventory_multiplier
-    next_voi = VOI_array.sum(axis = (1,2)) ## sum up the VOI for each path first element
-    #del VOI_array
 
-    VOI_array_now  = np.matmul(
-        (positions).sum(axis = 0)/n_paths.sum(),
-        np.array([[5,3,2],[1,1,1],[-1,-1,-1]]),dtype=np.float64)
-    VOI_array_now[VOI_array_now<1] = 0
+    tmp = VOI_array.sum(axis=2)   # shape (n_paths, 3)
+    next_voi = tmp.sum(axis=1)
+    
+    VOI_array_now = np.zeros((5,3), dtype=np.float64)
+    B = np.array([[5,3,2],[1,1,1],[-1,-1,-1]])
+    positions = positions.sum(axis=0)
+    inv_n = 1.0 / n_paths.sum()
+
+    for i in nb.prange(5):
+        for j in range(3):
+            s = 0.0
+            for k in range(3):
+                s += positions[i, k] * inv_n * B[k, j]
+            if s < 1:
+                s = 0
+            VOI_array_now[i, j] = s
+    
     VOI_array_now = VOI_array_now*game_inventory_matrix
     now_voi  = VOI_array_now.sum()
     #del VOI_array_now
 
     VOI = ((next_voi - now_voi)*n_paths).sum()/n_paths.sum()
 
-    DO_hits   = DO_hits_local.sum(axis=0)
-
     return positions, DO_hits, VOI
 
 @nb.njit
 def compute_voi_array(positions):
     n = positions.shape[0]
-    VOI = np.zeros((n, 3, 3), dtype=np.float64)
+    VOI = np.zeros((n, 5, 3), dtype=np.float64)
 
     score = np.array([[5.0, 3.0, 2.0],
                       [1.0, 1.0, 1.0],
@@ -1373,11 +1385,13 @@ def compute_voi_array(positions):
 
         inv_n = 1.0 / n_paths
 
-        for r in range(3):
+        for r in range(5):
             for c in range(3):
                 s = 0.0
                 for k in range(3):
                     s += positions[i, r, k] * inv_n * score[k, c]
+                if s < 1:
+                    s = 0
                 VOI[i, r, c] = s
 
     return VOI
