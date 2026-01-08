@@ -528,6 +528,19 @@ class CamelUp():
                                    AVG_inf+=e_payoff
                     iterations+=1
         return AVG_inf/iterations-VOI
+
+    def game_inventory_matrix(self,game_inventory):
+        '''
+        This function creates a matrix of the game inventory.
+        '''
+        game_inventory_matrix = np.zeros((5,3))
+        for i in game_inventory:
+            color, number = i.split(" ")
+            number = [5,3,2].index(int(number[1]))
+            color_index = self.Camels.index(color)
+            game_inventory_matrix[color_index, number] += 1
+        return game_inventory_matrix
+
     def one_turn(self,print_option=True,OD=False,player = ""):
         '''
         This function manages all the payoffs
@@ -562,8 +575,14 @@ class CamelUp():
         start_field = copy.deepcopy(self.game_field)
         ## render said field
         rendered_field, player_mapping = render_field(self.game_field)
+        
+        ## render game inventory matrix
+        game_inventory_matrix = self.game_inventory_matrix(self.game_inventory)
+        
         ## run simulation numba accelerated
-        base_positions, base_DO_hits = sim_all_moves(rendered_field, len(self.players), n_camels_thrown, Camels_die_rendered, verbose=False)
+        base_positions, base_DO_hits, VOI = sim_all_moves(
+            rendered_field, len(self.players), n_camels_thrown, 
+            Camels_die_rendered, game_inventory_matrix, verbose=False)
         
         payoff = {}
         n_paths = base_positions[0,:].sum()
@@ -1128,7 +1147,7 @@ def _all_camel_permutations(camels_not_thrown: np.ndarray):
 @nb.njit(cache=True, parallel=True)
 def sim_all_moves(
     rendered_field:np.ndarray, n_players:int, n_camels_thrown:int, 
-    camels_not_thrown:list[int], verbose:bool = True
+    camels_not_thrown:list[int], game_inventory_matrix:np.ndarray,verbose:bool = True
        ):
     '''
     This function simulates the paths for the moves of the camels
@@ -1142,14 +1161,18 @@ def sim_all_moves(
         Number of camels that have been thrown.
     camels_not_thrown: list[int]
         Camels that have not been thrown. Information needed to simulate properly and to infer game version.
-
+    game_inventory_matrix: np.ndarray
+        Matrix of game inventory, calculated before the call of this function.
+    verbose: bool
+        Whether to print verbose output.
     Returns
     -------
-    probabilities: array of shape (5,3)
-        Probabilities of the camels to end up in the first, second, third and lower positions.
-        The first dimension is the camel, the second dimension is the position.
-    payoffs: array of shape (x,2)
-        Positions and hits for all desert and oasis fields.
+    positions: array of shape (path_multiplier,5,3)
+        Positions of the camels on the field.
+    DO_hits: array of shape (n_players, 3)
+        Hits for all desert and oasis fields.
+    VOI: float
+        Value of information of the move.
     '''
 
     len_all_camels = n_camels_thrown + len(camels_not_thrown)
@@ -1297,11 +1320,34 @@ def sim_all_moves(
 
     positions = positions_local.sum(axis=1)
     del positions_local
-    VOI_array = np.matmul(positions, np.array([[5,3,2],[1,1,1],[-1,-1,-1]]*positions.shape[0]))
+    
+    game_inventory_multiplier = np.tile(game_inventory_matrix, (positions.shape[0],1,1))
 
-    if len_all_camels == 6:
-        pass
+    ## calculate the number of paths for each first element (color+die result)
+    n_paths = positions.sum(axis = 2)[:,0]
+
+    ## for each path first element, calculate the VOI
+    VOI_array = np.matmul(
+        positions * (1/n_paths)[:, np.newaxis, np.newaxis], 
+        np.tile([[5,3,2],[1,1,1],[-1,-1,-1]], (positions.shape[0],1)).reshape(positions.shape[0],3,3))
+    VOI_array[VOI_array<1] = 0 ## only count payoff elements with expected value > 1
+    VOI_array = VOI_array * game_inventory_multiplier
+    next_voi = VOI_array.sum(axis = (1,2)) ## sum up the VOI for each path first element
+    del VOI_array
+
+    VOI_array_now  = np.matmul(
+        (positions).sum(axis = 0)/n_paths.sum(),
+        np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
+    #print(VOI_array_now)
+    VOI_array_now[VOI_array_now<1] = 0
+    VOI_array_now = VOI_array_now*game_inventory_matrix
+    now_voi  = VOI_array_now.sum()
+    del VOI_array_now
+
+    VOI = ((next_voi - now_voi)*n_paths).sum()/n_paths.sum()
+
     DO_hits   = DO_hits_local.sum(axis=0)
+
     return positions, DO_hits, VOI
 
 
