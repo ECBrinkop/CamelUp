@@ -399,7 +399,36 @@ class CamelUp():
         row_n += margins[2]
         
         ### header of player coins
+        row_n = self.print_c(row_n)
+
+        row_n += margins[3]
+        for row in range(len(self.players.values())):
+            self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(self.Camels)
+        row_n += margins[4]
+
+        self.rendered_output.append([""],[" "*gap_margin + "Player Inventories and expected payoffs:"])
+
+        ### print player inventories and expected payoffs
+        for player in self.players.values():
+            self.rendered_output.append([""],[" "*gap_margin + "## " +player.name+" ##"])
+            self.rendered_output.append([""])
+            for element in player.inventory:
+                if element == "Diced":
+                    pass ## TODO: add diced case
+                elif element in ["Desert","Oasis"]:
+                    pass ## TODO: add desert and oasis case
+                else:
+                    pass ## TODO: add plate case
+
+    def print_c(self, index = 0): ## DONE! 
+        print_hint2("Coins of players:")
+        gap_margin = self.gap_margin
         range_par = min(len(self.players),4)
+        if index == 0:
+            row_n = 0
+            self.rendered_output = []
+        else:
+            row_n = index
         self.rendered_output[row_n] += " "*gap_margin + "Players "
         lengths = [max(len(player.name)+2,7) for player in self.players.values()]
         self.rendered_output[row_n] += "".join([f"{player.name:<{lengths[i]}} " for i in range(range_par)])
@@ -425,46 +454,23 @@ class CamelUp():
             row_n += 1
             self.rendered_output[row_n] += " "*gap_margin + "EV      "
             self.rendered_output[row_n] += "".join([f"{player.expected_payoff:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
+        if index == 0:
+            print("\n".join(self.rendered_output))
+        else:
+            return row_n
 
-        row_n += margins[3]
-        for row in range(len(self.players.values())):
-            self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(self.Camels)
-        row_n += margins[4]
-
-        self.rendered_output.append([""],[" "*gap_margin + "Player Inventories and expected payoffs:"])
-
-        ### print player inventories and expected payoffs
-        for player in self.players.values():
-            self.rendered_output.append([""],[" "*gap_margin + "## " +player.name+" ##"])
-            self.rendered_output.append([""])
-            for element in player.inventory:
-                if element == "Diced":
-                    pass ## TODO: add diced case
-                elif element in ["Desert","Oasis"]:
-                    pass ## TODO: add desert and oasis case
-                else:
-                    pass ## TODO: add plate case
-
-    def print_c(self):
-        print_hint2("Coins of players:")
-        max_len_name = 10
-        for i in self.players.values():
-            max_len_name = max(max_len_name,len(i.name))
-        print_coins = "Player:          | "
-        for i in self.players.values():
-            print_coins += print_adj(i.name,max_len_name,"c") +" | "
-        print_coins = print_coins[:-3] +"\n"+"–"*(19+len(self.players)*(max_len_name+3))+"\nCoins:           | "
-        for i in self.players.values():
-            print_coins += print_adj(str(i.coins),max_len_name,"c") +" | "
-        print_coins = print_coins[:-3] +"\nExpected Payoff: | "
-        for i in self.players.values():
-            print_coins += print_adj(str(i.expected_payoff),max_len_name,"c") +" | "
-        print_coins = print_coins[:-3] +"\n"
-        print(print_coins)
     def moved_f(self,camel):
         if camel not in self.moved and camel in self.Camels:
             self.moved.append(camel)
-    def cl(self):
+            if camel == "Black":
+                self.moved.append("White")
+            elif camel == "White":
+                self.moved.append("Black")
+
+    def cl(self): ## DONE! 
+        """
+        This function clears the game and prepares for a new round.
+        """
         self.one_turn(False)
         self.moved = []
         for i in range(16):
@@ -475,9 +481,8 @@ class CamelUp():
         for i in self.players.keys():
             self.players[i].end_of_round()
         self.print_c()
-        self.win_prob = {}
-        self.fields = {}
-    def move(self,camel,steps):
+
+    def move(self,camel,steps): ## Done!
         if camel not in self.Camels:
             print("Invalid Camel!")
             return 0
@@ -488,70 +493,34 @@ class CamelUp():
                 index = self.game_field[j].index(camel)
                 moving_camels = self.game_field[j][index:]
                 self.game_field[j] = self.game_field[j][:index]
-                field = j + steps
+                if camel not in ["Black","White"]:
+                    field = j + steps
+                else:
+                    field = j - steps
                 break
         if "OASIS" in self.game_field[field]:
             player = self.game_field[field][1]
             print("#"*len(player)+"#############\n"+player+" gets a coin!\n"+"#"*len(player)+"#############\n")
             self.players[self.game_field[field][1]].coins+=1
-            field += 1
+            if camel not in ["Black","White"]:
+                field += 1
+            else:
+                field -= 1
             self.game_field[field].extend(moving_camels)
         elif "DESERT" in self.game_field[field]:
             player = self.game_field[field][1]
             print("#"*len(player)+"#############\n"+player+" gets a coin!\n"+"#"*len(player)+"#############\n")
             self.players[self.game_field[field][1]].coins+=1
-            field -= 1
+            if camel not in ["Black","White"]:
+                field -= 1
+            else:
+                field += 1
             moving_camels.extend(self.game_field[field])
             self.game_field[field] = moving_camels
         else:
             self.game_field[field].extend(moving_camels)
-    def value_of_information_increase(self,VOI):
-        '''
-        This function is a bit buggy, interpretation needs to be added for this.
-        
-        '''
-        AVG_inf     = 0
-        iterations  = 0
-        for i in self.Camels:
-            if i not in self.moved:
-                for j in range(1,4):
-                    payoff = {}
-                    for k in range(len(self.game_field)):
-                        if "OASIS" in self.game_field[k] or "DESERT" in self.game_field[k]:
-                            payoff[str(k+1)] = 0
-                    npaths = 0
-                    first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
-                    second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
-                    # print(i+" "+str(j))
-                    field,hit = self.move_simulation(copy.deepcopy(self.game_field), i,j)
-                    if len([*field[16],*field[17],*field[18]]) > 0:
-                        ranks = self.rank(field)
-                        first[ranks[-1]]+=1*3**(4-len(self.moved))
-                        second[ranks[-2]]+=1*3**(4-len(self.moved))
-                        if len(hit.values())>0:
-                            key = list(hit.keys())[0]
-                            payoff[key]+=hit[key]
-                        npaths += 1*3**(4-len(self.moved))
-                        continue
-                    liste = []
-                    for k in self.Camels:
-                        if k != i and k not in self.moved:
-                            liste.append(k)
-                    first,second,payoff,n_paths1 = self.flexible_for(liste,field,first,second,payoff)
-                    if len(hit.values())>0:
-                        key = list(hit.keys())[0]
-                        payoff[key]+=hit[key]*n_paths1
-                    npaths += n_paths1
-                    for k in self.Camels:
-                       for m in [5,3,2]:
-                           if k+" ["+str(m)+"]" in self.game_inventory:
-                               e_payoff = first[k]/npaths*m+second[k]/npaths-(1-(first[k]-second[k])/npaths)
-                               if e_payoff>=1:
-                                   AVG_inf+=e_payoff
-                    iterations+=1
-        return AVG_inf/iterations-VOI
 
-    def game_inventory_matrix(self,game_inventory):
+    def game_inventory_matrix(self,game_inventory): ## Done!
         '''
         This function creates a matrix of the game inventory.
         '''
@@ -570,9 +539,7 @@ class CamelUp():
         if player not in self.players.keys():
             print("Invalid player!")
             return
-        ## !!! marker
-        first = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
-        second = {"Yellow":0,"Blue":0,"Green":0,"Orange":0,"Purple":0}
+        
         # determine camels that haven't moved:
         Camels_die = copy.deepcopy(self.Camels)
         for i in self.moved:
@@ -622,13 +589,16 @@ class CamelUp():
 
         ## handle desert value calculation for voi and differentials for desert plate changes
         ## !!! marker
+
+        ## questions: How are player inventories handled? This is key to determining the expected payoffs of desert and oasis fields for the player at turn.
+        ## Involves handling of DO plates, dice plates, and bet plates.
+        ## ideally directly usable in field printing.
         
         desert_value = {}
         for key, value in payoff.items():
             field_index = value["Field"]
             desert_value[field_index] = value["Expected Payoff"]
         ## calculate VOI base for dice rolls based on camel values above 1
-        ## !!! this might be improved by using some measure of uncertainty of camel payoffs
         VOI = 0
         for i in self.game_inventory:
             color, number = i.split(" ")
