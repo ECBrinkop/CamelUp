@@ -356,15 +356,22 @@ class CamelUp():
             - Expected Payoffs of plates. 6x5 or 5x6
             - Coins and expected Payoffs of players up to 8x3 or 3x8.
             - Camels not diced 1x7.
+        the space that this function has is either 41 or 31 rows, depending on the game mode. 
             ## 2 space between lines, 1 after odd lines, 4-3 space if extended game is played.
+            extended game: 41 rows 5, (win probs) 4, 6, (expected payoffs) 5, 6, (coins) 3, 6, (camels not diced) 1, 5.
+            standard game: 31 rows 3, (win probs) 4, 4, (expected payoffs) 5, 4, (coins) 3, 4, (camels not diced) 1, 3.
             - Player Inventories and expected payoffs of items in inventory. Structured list below the field.
         '''
         gap_margin = self.gap_margin
         
-        payoffs_width = max(9*6,10+ sum(len(i["name"])+1 for i in self.players.values()))
+        i = 0 if self.black_white else 2
+        margins = np.array([3,4,4,4,3])+i
+        ## if more than 4 players, lower the margins in the middle so two rows of players fit.
+        if len(self.players) >4: 
+            margins[1:4] -= 1
+        margins = margins.tolist()
         ## !!! marker 
 
-        
         width = self.print_dim[1]-self.total_width
         header_statement = "Win Probabilities"
         self.rendered_header[0] += "{string:^{width}s}".format(\
@@ -376,53 +383,68 @@ class CamelUp():
         self.rendered_header[2] += "{string:^{width}s}".format(\
                                     string="#"*(len(header_statement)+2*4),
                                     width = width)
+
+        row_n = margins[0]
+
+        probabilities = pd.DataFrame(self.base_probabilities, index=self.Camels, columns=["First","Second","Lose"])
+        payoffs = pd.DataFrame(self.base_payoffs, index=self.Camels, columns=["5-Plate","3-Plate","2-Plate"])
+        prob_strings, payoffs_strings = format_tables(probabilities, payoffs, self.game_inventory, self.black_white)
+        for row in range(len(prob_strings)):
+            self.rendered_output[row_n] += " "*gap_margin + prob_strings[row]
+            row_n += 1
+        row_n += margins[1]
+        for row in range(len(payoffs_strings)):
+            self.rendered_output[row_n] += " "*gap_margin + payoffs_strings[row]
+            row_n += 1
+        row_n += margins[2]
         
-        for row in range(len(self.rendered_output)):
-            self.rendered_output[row]+=" "*gap_margin
-        self.rendered_output[0]+= "—"*(cell_width*4+5)
-        self.rendered_output[1]+= "|"+"|".join(["{i:^{width}}".format(i=i,width = cell_width) \
-                                                for i in [" ","First","Second","Lose"]])+"|"
-        self.rendered_output[2]+= "—"*(cell_width*4+5)
-        for camel_n in range(len(self.Camels)):
-            camel = self.Camels[camel_n]
-            row = "|{camel:^{width}s}|".format(camel=camel,width=cell_width)+\
-                "|".join(["{i:^{width}.1%}".format(i=i,width = cell_width) \
-                                                for i in [self.win_prob[camel],
-                                                          self.sec_prob[camel],
-                                                          self.lose_prob[camel]]])+"|"
-            self.rendered_output[2+camel_n*2+1] += row
-            self.rendered_output[2+camel_n*2+2]+= "—"*(cell_width*4+5)
-        row = 2+camel_n*2+3
-        self.rendered_output[row] += " "*(cell_width*4+5)
-        header_statement = "Expected Payoffs"
-        self.rendered_output[row+1] += "{string:^{width}s}".format(\
-                                    string="#"*(len(header_statement)+2*4),
-                                    width = width-2*gap_margin)
-        self.rendered_output[row+2] += "{string:^{width}s}".format(\
-                                    string="##  "+header_statement+"  ##",
-                                    width = width-2*gap_margin)
-        self.rendered_output[row+3] += "{string:^{width}s}".format(\
-                                    string="#"*(len(header_statement)+2*4),
-                                    width = width-2*gap_margin)
-        self.rendered_output[row+4] += " "*(cell_width*4+5)
-        row = row+5
-        self.rendered_output[row]+= "—"*(cell_width*4+5)
-        self.rendered_output[row+1]+= "|"+"|".join(["{i:^{width}}".format(i=i,width = cell_width) \
-                                                for i in [" ","5-Plate","3-Plate","2-Plate"]])+"|"
-        self.rendered_output[row+2]+= "—"*(cell_width*4+5)
-        for camel_n in range(len(self.Camels)):
-            camel = self.Camels[camel_n]
-            row_text = "|{camel:^{width}s}|".format(camel=camel,width=cell_width)
-            for win_value in [5,3,2]:
-                brackets = ["",""]
-                if camel + " [{:d}]".format(win_value) not in self.game_inventory:
-                    brackets = ["[","]"]
-                row_text += "{value:^{width}s}".format(value = brackets[0]+\
-                    str(round(self.ret[camel+" [{:d}]".format(win_value)],2))+"$"+brackets[1],
-                    width = cell_width)+"|"
-            self.rendered_output[camel_n*2+3+row] += row_text
-            self.rendered_output[camel_n*2+4+row]+= "—"*(cell_width*4+5)
-        
+        ### header of player coins
+        range_par = min(len(self.players),4)
+        self.rendered_output[row_n] += " "*gap_margin + "Players "
+        lengths = [max(len(player.name)+2,7) for player in self.players.values()]
+        self.rendered_output[row_n] += "".join([f"{player.name:<{lengths[i]}} " for i in range(range_par)])
+        ### player current coins
+        row_n += 1
+        self.rendered_output[row_n] += " "*gap_margin + "Coins   "
+        self.rendered_output[row_n] += "".join([f"{player.coins:<{lengths[i]}} " for i in range(range_par)])
+        ### player current expected payoff
+        row_n += 1
+        self.rendered_output[row_n] += " "*gap_margin + "EV      "
+        self.rendered_output[row_n] += "".join([f"{player.expected_payoff:<{lengths[i]}} " for i in range(range_par)])
+        if len(self.players) > 4:
+            ### header of player coins
+            row_n += 1
+            self.rendered_output[row_n] += " "*gap_margin + "Players "
+            lengths = [max(len(player.name)+2,7) for player in self.players.values()[4:]]
+            self.rendered_output[row_n] += "".join([f"{player.name:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
+            ### player current coins
+            row_n += 1
+            self.rendered_output[row_n] += " "*gap_margin + "Coins   "
+            self.rendered_output[row_n] += "".join([f"{player.coins:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
+            ### player current expected payoff
+            row_n += 1
+            self.rendered_output[row_n] += " "*gap_margin + "EV      "
+            self.rendered_output[row_n] += "".join([f"{player.expected_payoff:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
+
+        row_n += margins[3]
+        for row in range(len(self.players.values())):
+            self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(self.Camels)
+        row_n += margins[4]
+
+        self.rendered_output.append([""],[" "*gap_margin + "Player Inventories and expected payoffs:"])
+
+        ### print player inventories and expected payoffs
+        for player in self.players.values():
+            self.rendered_output.append([""],[" "*gap_margin + "## " +player.name+" ##"])
+            self.rendered_output.append([""])
+            for element in player.inventory:
+                if element == "Diced":
+                    pass ## TODO: add diced case
+                elif element in ["Desert","Oasis"]:
+                    pass ## TODO: add desert and oasis case
+                else:
+                    pass ## TODO: add plate case
+
     def print_c(self):
         print_hint2("Coins of players:")
         max_len_name = 10
@@ -580,12 +602,11 @@ class CamelUp():
         game_inventory_matrix = self.game_inventory_matrix(self.game_inventory)
         
         ## run simulation numba accelerated
-        base_positions, base_DO_hits, VOI = sim_all_moves(
+        self.base_probabilities, self.base_DO_hits, VOI = sim_all_moves(
             rendered_field, len(self.players), n_camels_thrown, 
             Camels_die_rendered, game_inventory_matrix, verbose=False)
         
         payoff = {}
-        n_paths = base_positions[0,:].sum()
         
         for i in range(rendered_field.shape[0]):
             if rendered_field[i, 0]>7:
@@ -594,10 +615,9 @@ class CamelUp():
                 payoff[player_name] = {
                     "Type": "Desert" if rendered_field[i, 0] == 8 else "Oasis", 
                     "Field": i,
-                    "Expected Payoff": base_DO_hits[player_index-10, 0]/n_paths}
+                    "Expected Payoff": self.base_DO_hits[player_index-10, 0]}
 
-        base_probabilities = base_positions/n_paths
-        base_payoffs = np.matmul(base_probabilities, np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
+        self.base_payoffs = np.matmul(self.base_probabilities, np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
         #base_payoffs = pd.DataFrame(base_payoffs, index=self.Camels[:5], columns=["5-Plate", "3-Plate", "2-Plate"])
 
         ## handle desert value calculation for voi and differentials for desert plate changes
@@ -1094,7 +1114,7 @@ def render_field(Field):
     return rendered_field, inv_player_mask
 
 ## helper function to generate all dice permutations
-@nb.njit#(cache=True)
+@nb.njit(cache=True)
 def _all_dice_permutations(draw_n_camels):
     n_dice_rolls = 3**draw_n_camels
     dice_rolls = np.zeros((n_dice_rolls,draw_n_camels),dtype=np.int64)
@@ -1103,7 +1123,7 @@ def _all_dice_permutations(draw_n_camels):
             dice_rolls[i,j] = (i // (3**j)) % 3 + 1
     return dice_rolls
 
-@nb.njit#(cache=True)
+@nb.njit(cache=True)
 def _all_camel_permutations(camels_not_thrown: np.ndarray):
     """
     Generates all possible orders (permutations) to draw camels_not_thrown without replacement.
@@ -1142,7 +1162,65 @@ def _all_camel_permutations(camels_not_thrown: np.ndarray):
             i += 1
     return result
 
+def format_tables(probabilities: pd.DataFrame, payoffs: pd.DataFrame, game_inventory_list: list = [],extended: bool = False) -> str:
+    # layout parameters
+    row_label_width = 14
+    col_width = 10   # includes the extra leading space
+    camels = probabilities.index.tolist()
 
+    lines_probabilities = []
+
+    # ---------- Probabilities ----------
+    header = (
+        f"{'Probabilities':<{row_label_width}}"
+        + "".join(f"{c:>{col_width-1}} " for c in camels)
+    )
+    lines_probabilities.append(header)
+
+    for row in probabilities.columns:
+        line = f"{row:<{row_label_width}}"
+        for c in camels:
+            val = probabilities.loc[c, row] * 100.0
+            line += f"{val:>{col_width - 1}.2f}%"
+        lines_probabilities.append(line)
+
+    # ---------- Payoffs ----------
+    lines_payoffs = []
+    header = (
+        f"{'Payoffs':<{row_label_width}}"
+        + "".join(f"{c:>{col_width-1}} " for c in camels)
+    )
+    lines_payoffs.append(header)
+    line_idx = 0
+    for row in payoffs.columns:
+        line = f"{row:<{row_label_width}}"
+        for c in camels:
+            val = payoffs.loc[c, row]
+            # signed, aligned float
+            plate_name = f"{c} [{row[0]}]"
+            plate_there = plate_name in game_inventory_list
+            if plate_there and row[0] == "2" and extended:
+                if game_inventory_list.count(plate_name) == 1:
+                    plate_there = False
+            if not plate_there:
+                line += f"\033[31m{val:>{col_width-1}.2f}\033[0m "
+            else:
+                line += f"{val:>{col_width-1}.2f} "
+        lines_payoffs.append(line)
+        line_idx += 1
+    if extended:
+        line = f"{row:<{row_label_width}}"
+        for c in camels:
+            val = payoffs.loc[c, row]
+            # signed, aligned float
+            plate_name = f"{c} [{row[0]}]"
+            if plate_name not in game_inventory_list:
+                line += f"\033[31m{val:>{col_width-1}.2f}\033[0m "
+            else:
+                line += f"{val:>{col_width-1}.2f} "
+        lines_payoffs.append(line)
+
+    return lines_probabilities, lines_payoffs
 
 @nb.njit(cache=True, parallel=True)
 #@nb.njit(parallel=True)
@@ -1386,8 +1464,8 @@ def sim_all_moves(
 
     return positions*inv_n, DO_hits*inv_n, VOI
 
-#@nb.njit(cache=True, parallel=True)
-@nb.njit(parallel =True)
+@nb.njit(cache=True, parallel=True)
+#@nb.njit(parallel =True)
 def compute_voi_array(positions):
     n = positions.shape[0]
     VOI = np.zeros((n, 5, 3), dtype=np.float64)
