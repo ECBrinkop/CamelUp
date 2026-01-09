@@ -694,33 +694,6 @@ class CamelUp():
                     print_fields += "Oasis "+i[:-1]+": " + str(round(fields[i],2)) +", "
             print_hint2(print_fields[:-2]+" }")
             self.rec = False
-    def move_simulation(self,field,camel,steps):
-        for j in range(len(field)):
-            if camel in field[j]:
-                index = field[j].index(camel)
-                moving_camels = field[j][index:]
-                field[j] = field[j][:index]
-                step = j + steps
-                break
-        hit = {}
-        # print(camel + " "+str(step+1))
-        if "OASIS" in field[step]:
-            # player = field[step][1]
-            # print("#"*len(player)+"#############\n"+" gets a coin!\n"+"#"*len(player)+"#############\n")
-            hit[str(step+1)] = 1
-            step += 1
-            field[step].extend(moving_camels)
-        elif "DESERT" in field[step]:
-            # player = field[step][1]
-            # print("#"*len(player)+"#############\n"+" gets a coin!\n"+"#"*len(player)+"#############\n")
-            hit[str(step+1)] = 1
-            step -= 1
-            moving_camels.extend(field[step])
-            field[step] = moving_camels
-        else:
-            field[step].extend(moving_camels)
-        # print(field)
-        return field,hit
 
     def _desert_iterator(self,player:str): ## done, untested
         '''
