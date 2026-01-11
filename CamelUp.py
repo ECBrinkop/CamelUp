@@ -548,14 +548,10 @@ class CamelUp():
             game_inventory_matrix[color_index, number] += 1
         return game_inventory_matrix
 
-    def one_turn(self,print_option=True,OD=False,player = ""): ## Done! untested!!!
-        '''
-        This function manages all the payoffs
-        '''
-        if player not in self.players.keys():
-            print("Invalid player!")
-            return
-        
+    def render_camels_die(self):
+        """
+        This function renders the camels that haven't moved.
+        """
         # determine camels that haven't moved:
         Camels_die = copy.deepcopy(self.Camels)
         for i in self.moved:
@@ -575,6 +571,17 @@ class CamelUp():
             n_camels_thrown = 6-len(Camels_die_rendered)
         else:
             n_camels_thrown = 5-len(Camels_die_rendered)
+        return Camels_die_rendered, n_camels_thrown
+
+    def one_turn(self,print_option=True,OD=False,player = ""): ## Done! untested!!!
+        '''
+        This function manages all the payoffs
+        '''
+        if player not in self.players.keys():
+            print("Invalid player!")
+            return
+        
+        Camels_die_rendered, n_camels_thrown = self.render_camels_die()
 
         # determine current field of play
         start_field = copy.deepcopy(self.game_field)
@@ -747,20 +754,23 @@ class CamelUp():
         for i in legal_fields:
             fields["D"+str(i)] = field.copy()
             fields["D"+str(i)][i] = ["DESERT",player]
-            fields["D"+str(i)] = render_field(fields["D"+str(i)],start_players)
+            fields["D"+str(i)], _ = render_field(fields["D"+str(i)],start_players)
             fields["O"+str(i)] = field.copy()
             fields["O"+str(i)][i] = ["OASIS",player]
-            fields["O"+str(i)] = render_field(fields["O"+str(i)],start_players)
+            fields["O"+str(i)], _ = render_field(fields["O"+str(i)],start_players)
 
         ## camels diced
-        Camels_die = [camel for camel in self.Camels if camel not in self.moved]
-        n_camels_thrown = 5-len(Camels_die)
+
+        game_inventory_matrix = self.game_inventory_matrix(self.game_inventory)
+        Camels_die_rendered, n_camels_thrown = self.render_camels_die()
 
         fields_payoffs = {}
         for i in fields.keys():
-            field_rendered = render_field(fields[i],start_players)
-            fields_payoffs[i] = sim_all_moves(field_rendered,len(self.players),n_camels_thrown,Camels_die,self.game_inventory_matrix)
-        
+            print(type(fields[i]),type(len(start_players)),type(n_camels_thrown),type(Camels_die_rendered),type(game_inventory_matrix))
+            fields_payoffs[i] = sim_all_moves(
+                fields[i],len(start_players),n_camels_thrown,
+                Camels_die_rendered,game_inventory_matrix, verbose = False)
+
         return fields_payoffs # dictionary of potential plate fields: returns and their payoff matrix
 
     def rank(self,field): ## DONE!
