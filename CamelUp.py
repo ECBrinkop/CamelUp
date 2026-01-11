@@ -97,7 +97,7 @@ class CamelUp():
                  n_players:int,
                  start:bool = True,
                  field = "",
-                 tutorial=True,
+                 user_guide=True,
                  black_white= False): ## DONE!
         self.black_white = black_white
         self.Camels = copy.deepcopy(self.standard_Camels)
@@ -114,7 +114,7 @@ class CamelUp():
             self.print_dim = self.print_dim_extended
 
         self.total_width = (5*self.render_field_cell_width+6)
-        self.tutorial=tutorial
+        self.user_guide=user_guide
         self.fields = {}
         self.game_winner = []
         self.game_loser = []
@@ -804,6 +804,8 @@ class CamelUp():
             self.make_a_move(player)
             if len(self.moved) == 5:
                 self.cl() #end of round function
+                if self.user_guide:
+                    self.print_usage_guide()
             index += 1
         self.game_end() #end of game
 
@@ -908,6 +910,16 @@ class CamelUp():
         print(print_adj("Type",10,"c")+" | "+print_adj("color",col0_len-5,"c")+" | "+\
               print_adj("t",col0_len-5,"c")+" | "+ print_adj("r",col0_len,"c")+" | "+
               print_adj("o, d or w",col0_len,"c")+" | "+print_adj("f",col0_len,"c"))
+    
+    def print_usage_guide(self):
+        print("\nUsage Guide:\n")
+        print("t: Throw a camel, picking color and number subsequently")
+        print("r: Throw a camel randomly")
+        print("o: Set Oasis, picking field subsequently")
+        print("d: Set Desert, picking field subsequently")
+        print("w: Withdraw desert or oasisplate")
+        print("f: Set final bet on winner or loser\n\n")
+
     def make_a_move(self,player):
         # self.print_game(True,True)
         CNM = ""
@@ -923,17 +935,8 @@ class CamelUp():
         self.print_c()
         print_hint2("Camels not moved: "+CNM[:-2])
         print_hint2(player+"'s move")
-        # if self.tutorial:
-        #     print("\nType:\n\
-        #            \t{throw:20s}for throwing the dice.\n\
-        #            \t{camel_name:20s}for taking a round bet on a camel\n\
-        #            \t{random:20s}for simulating a die throw (camel move)\n\
-        #            \t{oasis:20s}for moving the Oasis or Desert plate or Withdrawing\n\
-        #            \t{final:20s}for taking a game bet\n\
-        #            \t{exit_s:20s}for exiting the game\n\
-        #            ".format(throw = "t",camel_name="Name of Camel",
-        #                     random="r",oasis="o, d, w", 
-        #                     final="f",exit_s="exit"))
+        if self.user_guide:
+            self.print_usage_guide()
         while True:
             print("Move t for throw a camel, r for random throw, o or d or w for desert, oasis, [Camel] for bet, f for final bet")
             move = input()
