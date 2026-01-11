@@ -74,9 +74,9 @@ class CamelUp():
         '                                                                    ═',
         '                                                                    ║',
         '                                                                    ║',
-        '                 ═════════════════════════════════                  ║',
-        '   <13>          ║Value of Information:     {VOI:5.3f}║           < 5>   ║',
-        '                 ═════════════════════════════════                  ║',
+        '                ═══════════════════════════════════                 ║',
+        '   <13>         ║ Value of Information:     {VOI:5.3f} ║          < 5>   ║',
+        '                ═══════════════════════════════════                 ║',
         '                                                                    ║',
         '                                                                    ║',
         '                                                                    ═',
@@ -104,6 +104,7 @@ class CamelUp():
         self.Inventory = copy.deepcopy(self.standard_Inventory)
         self.render_field_cell_width = self.render_field_cell_width_standard
         self.print_dim = self.print_dim_standard
+        self.center_design = self.center_design_standard
 
         ## settings if extended game is played
         if self.black_white:
@@ -112,6 +113,7 @@ class CamelUp():
             self.Inventory.extend([f"{i} [2]" for i in self.standard_Camels])
             self.render_field_cell_width = self.render_field_cell_width_extended
             self.print_dim = self.print_dim_extended
+            self.center_design = self.center_design_extended
 
         self.total_width = (5*self.render_field_cell_width+6)
         self.user_guide=user_guide
@@ -232,6 +234,7 @@ class CamelUp():
         """
         This function is used to print the game field and payoffs. This depends on the settings of the game.
         """
+        print(self.print_dim)
         self.rendered_output = [""]*self.print_dim[0]
         self.rendered_header = [""]*3
         if field:
@@ -273,8 +276,8 @@ class CamelUp():
                                     width = total_width-18)
 
         ## field rendering
-        vertical_sign = "|" if self.black_white else "║"
-        horizontal_sign = "—" if self.black_white else "═"
+        vertical_sign = "║" if self.black_white else "|"
+        horizontal_sign = "═" if self.black_white else "—"
         self.rendered_output[0]+= horizontal_sign*total_width
         local_center_design = self.center_design+[]
         ## format VOI into field center depending on game mode
@@ -289,6 +292,9 @@ class CamelUp():
                 if row_n in [1,2,3] and column_n in [1,2,3]:
                     if column_n ==1:
                         for render_row in range(row_n*(n_rows_cells+1),row_n*(n_rows_cells+1)+n_rows_cells+1):
+                            if "VOI" in local_center_design[render_row-(n_rows_cells+1)]:
+                                self.rendered_output[render_row+1] += local_center_design[render_row-(n_rows_cells+1)].format(VOI=self.VOI)
+                                continue
                             self.rendered_output[render_row+1]+=local_center_design[render_row-(n_rows_cells+1)]
                     continue
                 field_n = self.field_structure[row_n][column_n] ## get field number
@@ -332,10 +338,10 @@ class CamelUp():
                         else:
                             field_contents[row_o] = f"{field_n_content[row_o]:^{self.render_field_cell_width}s}{vertical_sign}"
 
-                while len(field_n_content) < n_rows_cells: ##elongate the cell for the content to fit in the cell
-                    field_n_content.append("")
-                    if len(field_n_content) < n_rows_cells:
-                        field_n_content.insert(0,"")
+                while len(field_contents) < n_rows_cells: ##elongate the cell for the content to fit in the cell
+                    field_contents.append("")
+                    if len(field_contents) < n_rows_cells:
+                        field_contents.insert(0,"")
                 field_contents = field_contents + [horizontal_sign*(self.render_field_cell_width)]
                 for row_m in range(n_rows_cells+1):
                     render_row = row_m+row_n*(n_rows_cells+1)+1
@@ -426,7 +432,8 @@ class CamelUp():
             self.rendered_output[-1] += "\n"
 
     def print_c(self, index = 0): ## DONE! 
-        print_hint2("Coins of players:")
+        if index == 0:
+            print_hint2("Coins of players:")
         gap_margin = self.gap_margin
         range_par = min(len(self.players),4)
         if index == 0:
@@ -434,31 +441,35 @@ class CamelUp():
             self.rendered_output = []
         else:
             row_n = index
-        self.rendered_output[row_n] += " "*gap_margin + "Players "
+        self.rendered_output += [""]*3
+        if len(self.players) > 4:
+            self.rendered_output += [""]*3
+        self.rendered_output[row_n] += " "*gap_margin + "Players   "
         lengths = [max(len(player.name)+2,7) for player in self.players.values()]
-        self.rendered_output[row_n] += "".join([f"{player.name:<{lengths[i]}} " for i in range(range_par)])
+        names = [player.name for player in self.players.values()]
+        self.rendered_output[row_n] += "".join([f"{names[i]:<{lengths[i]}} " for i in range(range_par)])
         ### player current coins
         row_n += 1
-        self.rendered_output[row_n] += " "*gap_margin + "Coins   "
-        self.rendered_output[row_n] += "".join([f"{player.coins:<{lengths[i]}} " for i in range(range_par)])
+        self.rendered_output[row_n] += " "*gap_margin + "Coins     "
+        self.rendered_output[row_n] += "".join([f"{self.players[names[i]].coins:<{lengths[i]}} " for i in range(range_par)])
         ### player current expected payoff
         row_n += 1
-        self.rendered_output[row_n] += " "*gap_margin + "EV      "
-        self.rendered_output[row_n] += "".join([f"{player.expected_payoff:<{lengths[i]}} " for i in range(range_par)])
+        self.rendered_output[row_n] += " "*gap_margin + "EV        "
+        self.rendered_output[row_n] += "".join([f"{self.players[names[i]].expected_payoff:<{lengths[i]}} " for i in range(range_par)])
         if len(self.players) > 4:
             ### header of player coins
             row_n += 1
-            self.rendered_output[row_n] += " "*gap_margin + "Players "
+            self.rendered_output[row_n] += " "*gap_margin + "Players   "
             lengths = [max(len(player.name)+2,7) for player in self.players.values()[4:]]
-            self.rendered_output[row_n] += "".join([f"{player.name:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
+            self.rendered_output[row_n] += "".join([f"{names[4+i]:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
             ### player current coins
             row_n += 1
-            self.rendered_output[row_n] += " "*gap_margin + "Coins   "
-            self.rendered_output[row_n] += "".join([f"{player.coins:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
+            self.rendered_output[row_n] += " "*gap_margin + "Coins     "
+            self.rendered_output[row_n] += "".join([f"{self.players[names[4+i]].coins:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
             ### player current expected payoff
             row_n += 1
-            self.rendered_output[row_n] += " "*gap_margin + "EV      "
-            self.rendered_output[row_n] += "".join([f"{player.expected_payoff:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
+            self.rendered_output[row_n] += " "*gap_margin + "EV        "
+            self.rendered_output[row_n] += "".join([f"{self.players[names[4+i]].expected_payoff:<{lengths[i]}} " for i in range(len(self.players.values()[4:]))])
         if index == 0:
             print("\n".join(self.rendered_output))
         else:
@@ -567,8 +578,9 @@ class CamelUp():
 
         # determine current field of play
         start_field = copy.deepcopy(self.game_field)
+        start_players = copy.deepcopy(self.players)
         ## render said field
-        rendered_field, player_mapping = render_field(self.game_field)
+        rendered_field, player_mapping = render_field(start_field,start_players)
         
         ## render game inventory matrix
         game_inventory_matrix = self.game_inventory_matrix(self.game_inventory)
@@ -731,13 +743,14 @@ class CamelUp():
 
         Camels_die = [camel for camel in self.Camels if camel not in self.moved]
 
+        start_players = copy.deepcopy(self.players)
         for i in legal_fields:
             fields["D"+str(i)] = field.copy()
             fields["D"+str(i)][i] = ["DESERT",player]
-            fields["D"+str(i)] = render_field(fields["D"+str(i)])
+            fields["D"+str(i)] = render_field(fields["D"+str(i)],start_players)
             fields["O"+str(i)] = field.copy()
             fields["O"+str(i)][i] = ["OASIS",player]
-            fields["O"+str(i)] = render_field(fields["O"+str(i)])
+            fields["O"+str(i)] = render_field(fields["O"+str(i)],start_players)
 
         ## camels diced
         Camels_die = [camel for camel in self.Camels if camel not in self.moved]
@@ -745,7 +758,7 @@ class CamelUp():
 
         fields_payoffs = {}
         for i in fields.keys():
-            field_rendered = render_field(fields[i])
+            field_rendered = render_field(fields[i],start_players)
             fields_payoffs[i] = sim_all_moves(field_rendered,len(self.players),n_camels_thrown,Camels_die,self.game_inventory_matrix)
         
         return fields_payoffs # dictionary of potential plate fields: returns and their payoff matrix
@@ -1005,21 +1018,34 @@ class CamelUp():
             self.rec=True
         # self.rec=True
 
-def render_field(Field):
-    player_mask = {name: i+10 for i, name in enumerate(Field.players.keys())}
+class Field():
+    Camels = CamelUp.standard_Camels + ["Black", "White"]
+    def __init__(self,field=[],players=[],moved=[]):
+        self.game_field = field
+        self.players = players
+        for i in range(len(self.game_field)):
+            if len(self.game_field[i]) > 0:
+                if self.game_field[i][0] not in self.Camels:
+                    self.players[self.game_field[i][1]].plate_pos = i
+        self.moved = moved
+    def __repr__(self):
+        pass
+
+def render_field(field, players:dict):
+    player_mask = {name: i+10 for i, name in enumerate(players.keys())}
     mask = CamelUp.mask
     mask["DESERT"] = 8
     mask["OASIS"] = 9
 
-    rendered_field = np.zeros((len(Field.game_field),7),dtype=int)
-    for i in range(len(Field.game_field)):
-        if len(Field.game_field[i]) > 0:
-            if Field.game_field[i][0] in ["DESERT","OASIS"]:
-                rendered_field[i,0] = mask[Field.game_field[i][0]]
-                rendered_field[i,1] = player_mask[Field.game_field[i][1]]
+    rendered_field = np.zeros((len(field),7),dtype=int)
+    for i in range(len(field)):
+        if len(field[i]) > 0:
+            if field[i][0] in ["DESERT","OASIS"]:
+                rendered_field[i,0] = mask[field[i][0]]
+                rendered_field[i,1] = player_mask[field[i][1]]
             else:
-                for j in range(len(Field.game_field[i])):
-                    rendered_field[i,j] = mask[Field.game_field[i][j]]
+                for j in range(len(field[i])):
+                    rendered_field[i,j] = mask[field[i][j]]
     # Invert the player_mask dictionary to map back from plate payoffs to player names later
     inv_player_mask = {v: k for k, v in player_mask.items()}
     return rendered_field, inv_player_mask
@@ -1424,22 +1450,6 @@ class player(): #for simulation
         self.expected_payoff = 0
         self.plate_pos = None
         self.plate_value = 0
-
-
-
-
-class Field():
-    Camels = CamelUp.standard_Camels + ["Black", "White"]
-    def __init__(self,field=[],players=[],moved=[]):
-        self.game_field = field
-        self.players = players
-        for i in range(len(self.game_field)):
-            if len(self.game_field[i]) > 0:
-                if self.game_field[i][0] not in self.Camels:
-                    self.players[self.game_field[i][1]].plate_pos = i
-        self.moved = moved
-    def __repr__(self):
-        pass
 
 """
 Field Design
