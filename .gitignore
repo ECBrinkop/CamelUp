@@ -1,6 +1,7 @@
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
 
 # Numba cache
 *.nbc
