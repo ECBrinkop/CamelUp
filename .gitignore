@@ -1,0 +1,10 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Numba cache
+*.nbc
+*.nbi
+
+# Jupyter checkpoints
+.ipynb_checkpoints/

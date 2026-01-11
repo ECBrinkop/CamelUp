@@ -346,7 +346,7 @@ class CamelUp():
                         self.rendered_output[render_row]+= extra_sign
                     self.rendered_output[render_row]+= field_contents[row_m]
             
-    def print_render_payoffs(self):   
+    def print_render_payoffs(self): ## Done! untested!!!
         '''
         Renders the payoffs for printing purposes
         
@@ -411,14 +411,19 @@ class CamelUp():
         ### print player inventories and expected payoffs
         for player in self.players.values():
             self.rendered_output.append([""],[" "*gap_margin + "## " +player.name+" ##"])
-            self.rendered_output.append([""])
-            for element in player.inventory:
+            self.rendered_output.append([" "*gap_margin + "Inventory: "])
+            dice_counts = 0
+            if "Diced" in player.inventory:
+                dice_counts = player.inventory.count("Diced")
+            self.rendered_output[-1] += f"Diced: {dice_counts}, "
+            if player.plate_pos != None:
+                self.rendered_output[-1] += f"Plate[{player.plate_pos}]: {player.plate_value}, "
+            for element, payoff in zip(player.inventory, player.inventory_payoffs):
                 if element == "Diced":
-                    pass ## TODO: add diced case
-                elif element in ["Desert","Oasis"]:
-                    pass ## TODO: add desert and oasis case
+                    continue
                 else:
-                    pass ## TODO: add plate case
+                    self.rendered_output[-1] += f"{element}: {payoff}, "
+            self.rendered_output[-1] += "\n"
 
     def print_c(self, index = 0): ## DONE! 
         print_hint2("Coins of players:")
@@ -459,7 +464,7 @@ class CamelUp():
         else:
             return row_n
 
-    def moved_f(self,camel):
+    def moved_f(self,camel):  ## Done!
         if camel not in self.moved and camel in self.Camels:
             self.moved.append(camel)
             if camel == "Black":
@@ -532,7 +537,7 @@ class CamelUp():
             game_inventory_matrix[color_index, number] += 1
         return game_inventory_matrix
 
-    def one_turn(self,print_option=True,OD=False,player = ""):
+    def one_turn(self,print_option=True,OD=False,player = ""): ## Done! untested!!!
         '''
         This function manages all the payoffs
         '''
@@ -587,113 +592,71 @@ class CamelUp():
         self.base_payoffs = np.matmul(self.base_probabilities, np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
         #base_payoffs = pd.DataFrame(base_payoffs, index=self.Camels[:5], columns=["5-Plate", "3-Plate", "2-Plate"])
 
-        ## handle desert value calculation for voi and differentials for desert plate changes
-        ## !!! marker
-
+        ## handle desert value calculation for voi and differentials for desert plate changes (VOI is not needed for this)
         ## questions: How are player inventories handled? This is key to determining the expected payoffs of desert and oasis fields for the player at turn.
         ## Involves handling of DO plates, dice plates, and bet plates.
         ## ideally directly usable in field printing.
         
-        desert_value = {}
-        for key, value in payoff.items():
-            field_index = value["Field"]
-            desert_value[field_index] = value["Expected Payoff"]
-        ## calculate VOI base for dice rolls based on camel values above 1
-        VOI = 0
-        for i in self.game_inventory:
-            color, number = i.split(" ")
-            number = int(number[1])
-            color_index = self.Camels.index(color)
-            number_index = [5,3,2].index(number)
-            EV_plate = base_payoffs[color_index, number_index]
-            if EV_plate>=1:
-                VOI+=EV_plate
-        if len(self.moved)<4: ## if 4 camels are moved, the voi is irrelevant
-            self.VOI = self.value_of_information_increase(VOI)
-        else:
-            self.VOI = 1
-        
-        if print_option:
-            self.print_game(False,True)
+        ## create empty filter matrices for player inventories
+        player_inventory_filter = [np.zeros((5,3))]*len(self.players)
 
+        ## calculate expected payoffs for player inventories
+        player_index = 0
         for i in self.players.keys():
             e_payoff = 0
             for j in self.players[i].inventory:
                 if j == "Diced":
                     e_payoff+=1
+                    self.players[i].inventory_payoffs.append(1)
                 else:
                     color, number = j.split(" ")
                     number = int(number[1])
                     color_index = self.Camels.index(color)
                     number_index = [5,3,2].index(number)
-                    EV_plate = base_payoffs[color_index, number_index]
+                    EV_plate = self.base_payoffs[color_index, number_index]
+                    player_inventory_filter[player_index][color_index, number_index] = 1
+                    self.players[i].inventory_payoffs.append(EV_plate)
                     e_payoff += EV_plate
             if self.players[i].plate_pos != None:
-                e_payoff += payoff[i]["Expected Payoff"]
+                expeted_hits = self.base_DO_hits[i]
+                e_payoff += expeted_hits
+                self.players[i].plate_value = expeted_hits
             self.players[i].expected_payoff = round(e_payoff,2)
+            player_index += 1
         
+        self.fields_payoffs = {}
+        player_index = list(self.players.keys()).index(player)
         ## Oasis and Desert value optimisation.
         if OD:
-            ## count number of dice rolls
-            players_inventory = []
-            for i in self.players.keys():
-                for j in self.players[i].inventory:
-                    if j != "Diced":
-                        players_inventory.append([j,i])
-            
-            ## determine position of players desert/oasis fields
-            pos = self.players[player].plate_pos
             ## calculate desert value for player for all legal fields:
-            fields = self._desert_iterator(player)
+            fields_payoffs = self._desert_iterator(player)
             ## returns a dictionary of payoffs
 
-            for i in fields.keys():
-                if "W" in i:
-                    value = 0
-                elif i == "xxx":
-                    fields[i] = 0
-                    continue
-                else:
-                    value = fields[i][0][i[:-1]] #coin value of field
-                player_i = None
-                if i[0]!="W":
-                    game_field_i = int(i[:-1])-1
-                else:
-                    game_field_i = int(i[1:])-1
-                if len(self.game_field[game_field_i]) >0:
-                    if self.game_field[game_field_i][0] in ["DESERT","OASIS"]:
-                        player_i =  self.game_field[game_field_i][1]
-                for j in desert_value.keys():
-                    if int(j) > game_field_i:
-                        continue
-                    if player_i == self.game_field[int(j)-1][1] or \
-                        player_i == player and j!= i[0]:
-                        pass
-                    else:
-                        # print( desert_value, j, i, fields) ##testing
-                        if j in fields[i][0].keys():
-                            value+= desert_value[j]-fields[i][0][j]
-                        else:
-                            print("--",fields[i],j,i,desert_value,sep="\n--")
-                if player_i is None:
-                    player_i = player
-                for j in players_inventory:
-                    if player_i == j[1]:
-                        value += fields[i][1][j[0]]-self.ret[j[0]]
-                    else:
-                        value += self.ret[j[0]]-fields[i][1][j[0]]
-                fields[i] = value
-            self.fields = {**fields,**{}}
-            print_fields = "Plates: {"
-            for i in fields.keys():
-                if "W" in i:
-                    print_fields+= " Withdrawal: " + str(round(fields[i],2)) +", "
-                elif i[-1] == "D":
-                    print_fields += "Desert "+i[:-1]+": " + str(round(fields[i],2)) +", "
-                elif i[-1] == "O":
-                    print_fields += "Oasis "+i[:-1]+": " + str(round(fields[i],2)) +", "
-            print_hint2(print_fields[:-2]+" }")
-            self.rec = False
+            ## delta base is the expected payoff of the player's plate at the start of the turn.
+            delta_base = self.base_DO_hits[player_index]
+            for i in fields_payoffs.keys():
+                field_payoff = fields_payoffs[i]
+                delta = delta_base + -field_payoff[1][player_index] ## create copy of delta base
+                ## THIS player additionally gains, if the other players lose hits.
+                delta_other_players_hits = np.delete(self.base_DO_hits, player_index)-np.delete(field_payoff[1], player_index)
+
+                ## Additionally, THIS player gains the deltas in his expected payoffs:
+                delta_inventory_payoffs = np.sum(np.matmul(field_payoff[0],player_inventory_filter[player_index]))-\
+                    np.sum(np.matmul(self.base_payoffs,player_inventory_filter[player_index]))
+                delta += delta_inventory_payoffs
+
+                ## Finally, the player gains the expected payoffs of other players bets with the old plate, 
+                ## but loses the expected payoffs of other players bets with the new plate.
+                for i in len(self.players):
+                    if i != player_index:
+                        delta_other_players_bets = np.sum(np.matmul(self.base_payoffs,player_inventory_filter[i]))-\
+                            np.sum(np.matmul(field_payoff[0],player_inventory_filter[i]))
+                        delta += delta_other_players_bets
+
+                self.fields_payoffs[i] = delta
+        ## game should be printed only after calculations for deserts and oases are complete and expected payoffs are calculated.
+        if print_option:
+            self.print_game(True,True)
 
     def _desert_iterator(self,player:str): ## done, untested
         '''
@@ -727,6 +690,7 @@ class CamelUp():
                 fields[W_field] = render_field(field)
                 break
 
+        ## calculate all possible fields for desert and oasis
         Camels = 0
         distance = 0
         Camel_distance = [5] * 16
@@ -781,7 +745,8 @@ class CamelUp():
 
         fields_payoffs = {}
         for i in fields.keys():
-            fields_payoffs[i] = sim_all_moves(fields[i],len(self.players),n_camels_thrown,Camels_die)
+            field_rendered = render_field(fields[i])
+            fields_payoffs[i] = sim_all_moves(field_rendered,len(self.players),n_camels_thrown,Camels_die,self.game_inventory_matrix)
         
         return fields_payoffs # dictionary of potential plate fields: returns and their payoff matrix
 
@@ -1444,14 +1409,18 @@ class player(): #for simulation
         self.name = name
         self.coins = 3
         self.inventory = []
+        self.inventory_payoffs = []
         self.expected_payoff = 0
         self.plate_pos = None
+        self.plate_value = 0
     def end_of_round(self):
         self.coins += self.expected_payoff
         print_hint2(self.name + " earned " + str(int(self.expected_payoff)) +" this turn.")
         self.inventory = []
+        self.inventory_payoffs = []
         self.expected_payoff = 0
         self.plate_pos = None
+        self.plate_value = 0
 
 
 
