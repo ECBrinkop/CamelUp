@@ -122,7 +122,8 @@ class CamelUp():
         self.game_loser = []
         self.moved = []
         self.VOI = 0
-        self.win_prob = pd.DataFrame(0.0,index=self.Camels[:5],columns=["First","Second","Lose"])
+        self.base_probabilities = np.array([[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]])
+        self.base_payoffs = np.array([[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0]])
         self.game_inventory = copy.deepcopy(self.Inventory)
         self.game_field = [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]
         self.players = {}
@@ -240,7 +241,7 @@ class CamelUp():
         if field:
             self.print_render_field()
         if payoffs:
-            if self.win_prob.sum() == 0:
+            if self.base_probabilities.sum() == 0:
                 self.one_turn(print_option=False,OD=False,player = list(self.players.keys())[0])
             self.print_render_payoffs()
         print("\n"+"\n".join(self.rendered_header)+"\n") ## prints header that was filled in print_render_field()
@@ -660,16 +661,16 @@ class CamelUp():
                 delta_other_players_hits = np.delete(self.base_DO_hits, player_index)-np.delete(field_payoff[1], player_index)
 
                 ## Additionally, THIS player gains the deltas in his expected payoffs:
-                delta_inventory_payoffs = np.sum(np.matmul(field_payoff[0],player_inventory_filter[player_index]))-\
-                    np.sum(np.matmul(self.base_payoffs,player_inventory_filter[player_index]))
+                current_payoffs = np.matmul(field_payoff[0],np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
+                delta_payoff_matrix = current_payoffs-self.base_payoffs
+                delta_inventory_payoffs = np.sum(delta_payoff_matrix*player_inventory_filter[player_index])
                 delta += delta_inventory_payoffs
 
                 ## Finally, the player gains the expected payoffs of other players bets with the old plate, 
                 ## but loses the expected payoffs of other players bets with the new plate.
-                for i in len(self.players):
+                for i in range(len(self.players)):
                     if i != player_index:
-                        delta_other_players_bets = np.sum(np.matmul(self.base_payoffs,player_inventory_filter[i]))-\
-                            np.sum(np.matmul(field_payoff[0],player_inventory_filter[i]))
+                        delta_other_players_bets = -np.sum(delta_payoff_matrix*player_inventory_filter[i])
                         delta += delta_other_players_bets
 
                 self.fields_payoffs[i] = delta
@@ -766,7 +767,7 @@ class CamelUp():
 
         fields_payoffs = {}
         for i in fields.keys():
-            print(type(fields[i]),type(len(start_players)),type(n_camels_thrown),type(Camels_die_rendered),type(game_inventory_matrix))
+            #print(type(fields[i]),type(len(start_players)),type(n_camels_thrown),type(Camels_die_rendered),type(game_inventory_matrix))
             fields_payoffs[i] = sim_all_moves(
                 fields[i],len(start_players),n_camels_thrown,
                 Camels_die_rendered,game_inventory_matrix, verbose = False)
@@ -1169,247 +1170,208 @@ def format_tables(probabilities: pd.DataFrame, payoffs: pd.DataFrame, game_inven
 
     return lines_probabilities, lines_payoffs
 
-@nb.njit(cache=True, parallel=True)
-#@nb.njit(parallel=True)
-def sim_all_moves(
-    rendered_field:np.ndarray, n_players:int, n_camels_thrown:int, 
-    camels_not_thrown:list[int], game_inventory_matrix:np.ndarray,
-    n_threads: int = 8,
-    verbose:bool = True
-       ):
-    '''
-    This function simulates the paths for the moves of the camels
-    Parameters
-    ----------
-    rendered_field: np.ndarray
-        The rendered field, returned by the render_field function.
-    n_players: int
-        Number of players in the game.
-    n_camels_thrown: int
-        Number of camels that have been thrown.
-    camels_not_thrown: list[int]
-        Camels that have not been thrown. Information needed to simulate properly and to infer game version.
-    game_inventory_matrix: np.ndarray
-        Matrix of game inventory, calculated before the call of this function.
-    verbose: bool
-        Whether to print verbose output.
-    Returns
-    -------
-    positions: array of shape (path_multiplier,5,3)
-        Positions of the camels on the field.
-    DO_hits: array of shape (n_players, 3)
-        Hits for all desert and oasis fields.
-    VOI: float
-        Value of information of the move.
-    '''
+#
+# Splitting sim_all_moves into digestible sub-routines using numba where possible. 
+# Focus: Reduce compile time by reducing function complexity and size.
+#
 
+def _camel_index_maps(rendered_field, camels_not_thrown):
+    """
+    Return initial row/col indices of all relevant camels.
+    Not jitted; helper.
+    """
+    camel_row_idx_base = np.zeros(8, dtype=np.int64)
+    camel_col_idx_base = np.zeros(8, dtype=np.int64)
+    if 6 in camels_not_thrown:  # Extended version (7 camels)
+        camel_ids = range(1, 8)
+    else:
+        camel_ids = range(1, 6)
+    for i in camel_ids:
+        pos = np.argwhere(rendered_field == i)
+        camel_row_idx_base[i] = pos[0][0]
+        camel_col_idx_base[i] = pos[0][1]
+    return camel_row_idx_base, camel_col_idx_base
+
+@nb.njit(cache=True, parallel=True)
+def _simulate_paths(
+    rendered_field, all_camel_permutations, all_dice_permutations,
+    camel_row_idx_base, camel_col_idx_base,
+    n_threads, n_players, extra_dim, positions_local, DO_hits_local
+):
+    """
+    Simulate all paths for a given game state.
+    """
+    for path_idx in nb.prange(all_camel_permutations.shape[0] * all_dice_permutations.shape[0]):
+        camel_order_idx = path_idx // all_dice_permutations.shape[0]
+        dice_idx = path_idx % all_dice_permutations.shape[0]
+        dice_rolls = all_dice_permutations[dice_idx]
+        camel_order = all_camel_permutations[camel_order_idx]
+        tid = nb.get_thread_id()
+
+        field_copy = rendered_field.copy()
+        camel_row_idx = camel_row_idx_base.copy()
+        camel_col_idx = camel_col_idx_base.copy()
+
+        for move_idx in range(len(dice_rolls)):
+            move = dice_rolls[move_idx]
+            camel = camel_order[move_idx]
+            row = camel_row_idx[camel]
+            col = camel_col_idx[camel]
+            end = (field_copy[row] != 0).sum()
+            stack = field_copy[row, col:end].copy().reshape(1, -1)
+            field_copy[row, col:end] = 0
+            below_target = False
+
+            if camel not in [6, 7]:
+                target_field = row + move
+                if field_copy[target_field, 0] == 8:
+                    DO_hits_local[tid, field_copy[target_field, 1] - 10, 0] += 1
+                    target_field -= 1
+                    below_target = True
+                elif field_copy[target_field, 0] == 9:
+                    DO_hits_local[tid, field_copy[target_field, 1] - 10, 0] += 1
+                    target_field += 1
+            else:
+                target_field = row - move
+                if field_copy[target_field, 0] == 8:
+                    DO_hits_local[tid, field_copy[target_field, 1] - 10, 0] += 1
+                    target_field += 1
+                    below_target = True
+                elif field_copy[target_field, 0] == 9:
+                    DO_hits_local[tid, field_copy[target_field, 1] - 10, 0] += 1
+                    target_field -= 1
+            if target_field < 0:
+                target_field = 0
+            if below_target:
+                stack_len = stack.shape[1]
+                end = (field_copy[target_field] != 0).sum()
+                for j in range(end + stack_len - 1, stack_len - 1, -1):
+                    field_copy[target_field, j] = field_copy[target_field, j - stack_len]
+                for j in range(stack_len):
+                    field_copy[target_field, j] = stack[0, j]
+            else:
+                end_target_field = (field_copy[target_field] != 0).sum()
+                field_copy[target_field, end_target_field: end_target_field + stack.shape[1]] = stack
+
+            for i in range(7):
+                if field_copy[target_field, i] == 0:
+                    break
+                camel_update = field_copy[target_field, i]
+                camel_row_idx[camel_update] = target_field
+                camel_col_idx[camel_update] = i
+
+            if target_field > 16:
+                break
+        # Ranking and counting step
+        camel_positions = np.zeros(5)
+        for camel_rank in range(1, 6):
+            row = camel_row_idx[camel_rank]
+            col = camel_col_idx[camel_rank]
+            camel_positions[camel_rank - 1] = row * 7 + col
+        camel_ranking = np.argsort(-camel_positions.flatten())
+        extra_d = 3 * camel_order[0] + dice_rolls[0] - 4
+        positions_local[extra_d, tid, camel_ranking[0], 0] += 1
+        positions_local[extra_d, tid, camel_ranking[1], 1] += 1
+        for i in range(2, 5):
+            positions_local[extra_d, tid, camel_ranking[i], 2] += 1
+
+@nb.njit(cache=True, parallel=True)
+def _aggregate_results(
+    positions_local, DO_hits_local, game_inventory_matrix, n_players
+):
+    positions = positions_local.sum(axis=1)
+    DO_hits = DO_hits_local.sum(axis=0)
+    game_inventory_multiplier = np.empty((positions.shape[0], game_inventory_matrix.shape[0], game_inventory_matrix.shape[1]))
+    for i in range(positions.shape[0]):
+        game_inventory_multiplier[i] = game_inventory_matrix
+
+    n_paths = positions.sum(axis=2)[:, 0]
+    VOI_array = compute_voi_array(positions)
+    VOI_array = VOI_array * game_inventory_multiplier
+    tmp = VOI_array.sum(axis=2)
+    next_voi = tmp.sum(axis=1)
+    return positions, DO_hits, n_paths, next_voi, game_inventory_multiplier
+
+@nb.njit(cache=True, parallel=True)
+def _compute_now_voi(positions, game_inventory_matrix, n_paths):
+    VOI_array_now = np.zeros((5,3), dtype=np.float64)
+    B = np.array([[5,3,2],[1,1,1],[-1,-1,-1]])
+    agg_positions = positions.sum(axis=0)
+    inv_n = 1.0 / n_paths.sum()
+    for i in nb.prange(5):
+        for j in range(3):
+            s = 0.0
+            for k in range(3):
+                s += agg_positions[i, k] * inv_n * B[k, j]
+            if s < 1:
+                s = 0
+            VOI_array_now[i, j] = s
+    VOI_array_now = VOI_array_now * game_inventory_matrix
+    now_voi = VOI_array_now.sum()
+    agg_positions = None  # Help out numba/gc
+    return now_voi
+
+def sim_all_moves(
+    rendered_field: np.ndarray,
+    n_players: int,
+    n_camels_thrown: int,
+    camels_not_thrown: list,
+    game_inventory_matrix: np.ndarray,
+    n_threads: int = 8,
+    verbose: bool = True,
+):
+    '''
+    Split implementation for reduced jit compile time.
+    '''
     len_all_camels = n_camels_thrown + len(camels_not_thrown)
     draw_n_camels = len(camels_not_thrown)
     if len_all_camels > 5:
         draw_n_camels -= 1
-    # Another early exit for <=0 camels to move
     if draw_n_camels <= 0:
         if verbose:
             print("No more camels can be drawn (draw_n_camels == 0).")
         return np.zeros((5, 3), dtype=np.float64), np.zeros((n_players, 3), dtype=np.float64), 0.0
 
     all_dice_permutations = _all_dice_permutations(draw_n_camels)
-    # Generate all possible permutations of camels_not_thrown (numba friendly: i.e., as lists of integer arrays)
-    # (This is separate from all_dice_permutations, which is all product/dice rolls)
     camel_permutations = _all_camel_permutations(np.array(camels_not_thrown, dtype=np.int64))
-
     if verbose:
         print("draw_n_camels: ", draw_n_camels)
-        print("Number of paths: ", len(all_dice_permutations), "first 5 paths: ", all_dice_permutations[:5], "SHOULD number of paths", 3**draw_n_camels)
+        print("Number of paths: ", len(all_dice_permutations), "first 5 paths: ", all_dice_permutations[:5], "SHOULD number of paths", 3 ** draw_n_camels)
         print("Number of permutations: ", len(camel_permutations), "first 5 permutations:", camel_permutations[:5], "should permutations")
-
-    ## include white camel as well as black camel:
+    camels_swap_buf = list(camels_not_thrown)
     if 6 in camels_not_thrown:
-        camels_not_thrown.remove(6)
-        camels_not_thrown.append(7)
-        all_camel_permutations = np.concatenate((camel_permutations, _all_camel_permutations(np.array(camels_not_thrown, dtype=np.int64))), axis=0)
-        camels_not_thrown.remove(7)
-        camels_not_thrown.append(6)
+        camels_swap_buf.remove(6)
+        camels_swap_buf.append(7)
+        cmp2 = _all_camel_permutations(np.array(camels_swap_buf, dtype=np.int64))
+        all_camel_permutations = np.concatenate((camel_permutations, cmp2), axis=0)
+        camels_swap_buf.remove(7)
+        camels_swap_buf.append(6)
     else:
         all_camel_permutations = camel_permutations
-
     if verbose:
-        print("Number of full permutations: ", all_camel_permutations.shape[0]*all_dice_permutations.shape[0])
-
-    camel_row_idx_base = np.zeros(8,dtype=np.int64)
-    camel_col_idx_base = np.zeros(8,dtype=np.int64)
-    if 6 in camels_not_thrown:
-        for i in range(1,8):
-            pos = np.argwhere(rendered_field == i)
-            camel_row_idx_base[i] = pos[0][0]
-            camel_col_idx_base[i] = pos[0][1]
-    else:
-        for i in range(1,6):
-            pos = np.argwhere(rendered_field == i)
-            camel_row_idx_base[i] = pos[0][0]
-            camel_col_idx_base[i] = pos[0][1]
-
+        print("Number of full permutations: ", all_camel_permutations.shape[0] * all_dice_permutations.shape[0])
+    camel_row_idx_base, camel_col_idx_base = _camel_index_maps(rendered_field, camels_not_thrown)
     n_perm = len(all_camel_permutations)
-
     if len_all_camels == 6:
-        extra_dim = 3*7
+        extra_dim = 3 * 7
     else:
-        extra_dim = 3*5
-    
-    positions_local = np.zeros((extra_dim,n_threads, 5, 3), dtype=np.float64)
-    DO_hits_local   = np.zeros((n_threads, n_players, 1), dtype=np.float64)
-    #print("number of camel_orders: ", len(all_camel_permutations))
-    #print("number of dice_rolls: ", len(all_dice_permutations))
-    ## path simulation
-    for path_idx in nb.prange(len(all_camel_permutations) * len(all_dice_permutations)):
-        camel_order_idx = path_idx // len(all_dice_permutations)
-        dice_idx = path_idx % len(all_dice_permutations)
-        dice_rolls = all_dice_permutations[dice_idx]
-    #for camel_order_idx in nb.prange(len(all_camel_permutations)):
-        camel_order = all_camel_permutations[camel_order_idx]
-        tid = nb.get_thread_id()
-        
-    #    for dice_rolls in all_dice_permutations:
-            ##create field copy
-        if True:
-            field_copy = rendered_field.copy()
-
-            camel_row_idx = camel_row_idx_base.copy()
-            camel_col_idx = camel_col_idx_base.copy()
-
-            for move_idx in range(len(dice_rolls)):
-                move = dice_rolls[move_idx]
-                camel = camel_order[move_idx]
-                ## find camel in field_copy
-                row = camel_row_idx[camel]
-                col = camel_col_idx[camel]
-                # Extract the stack as a vector (all nonzero from (row, col) to (row, end))
-                # Optimized: slice out directly using numpy for speed (all leading nonzero, so from col to first 0 or end)
-                # Directly operate on the field_copy row to avoid extra reference
-                end = (field_copy[row] != 0).sum()
-
-                stack = field_copy[row, col:end].copy().reshape(1, -1)
-                # Zero out in-place
-                field_copy[row, col:end] = 0
-
-                ## move camel
-                below_target = False
-                if camel not in [6,7]:
-                    target_field = row + move
-                    if field_copy[target_field,0] == 8:
-                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
-                        #local_DO_hits[field_copy[target_field,1]-10, 0] += 1
-                        target_field -= 1
-                        below_target = True
-                    elif field_copy[target_field,0] == 9:
-                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
-                        target_field += 1
-                else:
-                    target_field = row - move
-                    if field_copy[target_field,0] == 8:
-                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
-                        target_field += 1
-                        below_target = True
-                    elif field_copy[target_field,0] == 9:
-                        DO_hits_local[tid, field_copy[target_field,1]-10, 0] += 1
-                        target_field -= 1
-                if target_field < 0: ## todo: implement negative target_field
-                    target_field = 0
-                ##place camel on or below target
-                #print(stack,field_copy[target_field,:-stack.shape[1]].reshape(1,-1))
-                if below_target:
-                    #field_copy[target_field, :] = np.concatenate((stack, field_copy[target_field, :-stack.shape[1]].reshape(1, -1)), axis=1)
-                    stack_len = stack.shape[1]
-                    row_width = field_copy.shape[1]
-                    end = (field_copy[target_field] != 0).sum()
-                    
-                    # shift existing camels right
-                    for j in range(end + stack_len - 1, stack_len - 1, -1):
-                        field_copy[target_field, j] = field_copy[target_field, j - stack_len]
-
-                    # insert stack at front
-                    for j in range(stack_len):
-                        field_copy[target_field, j] = stack[0, j]
-                else:
-                    end_target_field = (field_copy[target_field] != 0).sum()
-                    field_copy[target_field,end_target_field:end_target_field+stack.shape[1]] = stack
-
-                for i in range(7):
-                    if field_copy[target_field,i] == 0:
-                        break
-                    else:
-                        camel = field_copy[target_field,i]
-                        camel_row_idx[camel] = target_field
-                        camel_col_idx[camel] = i                        
-
-                if target_field > 16:
-                    break
-            camel_positions = np.zeros(5)
-            ## evaluation of the path
-            for camel in range(1,6):
-                row = camel_row_idx[camel]
-                col = camel_col_idx[camel]
-                camel_positions[camel-1] = row*7+col
-            if camel_order_idx == 0 and verbose: print(camel_positions, camel_order, dice_rolls)
-            camel_ranking = np.argsort(-camel_positions.flatten())
-
-            extra_d = 3*camel_order[0] + dice_rolls[0]-4
-            
-            #local_positions[extra_d, camel_ranking[0], 0] += 1
-            #local_positions[extra_d, camel_ranking[1], 1] += 1
-            #for i in range(2,5):
-            #    local_positions[extra_d, camel_ranking[i], 2] += 1
-            
-            positions_local[extra_d, tid, camel_ranking[0], 0] += 1
-            positions_local[extra_d, tid, camel_ranking[1], 1] += 1
-            for i in range(2,5):
-                positions_local[extra_d, tid, camel_ranking[i], 2] += 1
-
-    positions = positions_local.sum(axis=1)
-    DO_hits = DO_hits_local.sum(axis=0)
-    #print("Number of paths: ", positions[:,0,:].sum(axis=1))
-
-    game_inventory_multiplier = np.empty((positions.shape[0], game_inventory_matrix.shape[0], game_inventory_matrix.shape[1]))
-    for i in range(positions.shape[0]):
-        game_inventory_multiplier[i] = game_inventory_matrix
-
-    ## calculate the number of paths for each first element (color+die result)
-    n_paths = positions.sum(axis = 2)[:,0]
-    
-    VOI_array = compute_voi_array(positions)
-
-    #print("VOI_array: ", VOI_array)
-    #VOI_array[VOI_array<1] = 0 ## only count payoff elements with expected value > 1
-    VOI_array = VOI_array * game_inventory_multiplier
-
-    tmp = VOI_array.sum(axis=2)   # shape (n_paths, 3)
-    next_voi = tmp.sum(axis=1)
-    #print("next_voi: ", next_voi)
-    
-    VOI_array_now = np.zeros((5,3), dtype=np.float64)
-    B = np.array([[5,3,2],[1,1,1],[-1,-1,-1]])
-    positions = positions.sum(axis=0)
+        extra_dim = 3 * 5
+    positions_local = np.zeros((extra_dim, n_threads, 5, 3), dtype=np.float64)
+    DO_hits_local = np.zeros((n_threads, n_players, 1), dtype=np.float64)
+    _simulate_paths(
+        rendered_field, 
+        all_camel_permutations, 
+        all_dice_permutations, 
+        camel_row_idx_base, camel_col_idx_base,
+        n_threads, n_players, extra_dim, 
+        positions_local, DO_hits_local
+    )
+    positions, DO_hits, n_paths, next_voi, game_inventory_multiplier = _aggregate_results(
+        positions_local, DO_hits_local, game_inventory_matrix, n_players)
     inv_n = 1.0 / n_paths.sum()
-
-    for i in nb.prange(5):
-        for j in range(3):
-            s = 0.0
-            for k in range(3):
-                s += positions[i, k] * inv_n * B[k, j]
-            if s < 1:
-                s = 0
-            VOI_array_now[i, j] = s
-    
-    #print("VOI_array_now: ", VOI_array_now)
-    #print("game_inventory_matrix: ", game_inventory_matrix)
-    VOI_array_now = VOI_array_now*game_inventory_matrix
-    now_voi  = VOI_array_now.sum()
-    #del VOI_array_now
-    #print("now_voi: ", now_voi)
-    #print("n_paths: ", n_paths)
-    VOI = ((next_voi - now_voi)*n_paths).sum()/n_paths.sum()
-
-    return positions*inv_n, DO_hits*inv_n, VOI
+    now_voi = _compute_now_voi(positions, game_inventory_matrix, n_paths)
+    VOI = ((next_voi - now_voi) * n_paths).sum() / n_paths.sum()
+    return (positions * inv_n).sum(axis=0), DO_hits * inv_n, VOI
 
 @nb.njit(cache=True, parallel=True)
 #@nb.njit(parallel =True)
