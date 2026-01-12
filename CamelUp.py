@@ -12,6 +12,7 @@ from utils import print_header as print_hint2, print_adj
 import itertools
 import time
 import random as rd
+import sys
 
 class CamelUp():
     '''
@@ -117,7 +118,7 @@ class CamelUp():
 
         self.total_width = (5*self.render_field_cell_width+6)
         self.user_guide=user_guide
-        self.fields = {}
+        self.fields_payoffs = {}
         self.game_winner = []
         self.game_loser = []
         self.moved = []
@@ -300,50 +301,45 @@ class CamelUp():
                     continue
                 field_n = self.field_structure[row_n][column_n] ## get field number
                 field_n_content = copy.deepcopy(self.game_field[field_n])
-                field_contents = [" "*self.render_field_cell_width+vertical_sign]*n_rows_cells+\
-                    [horizontal_sign*(self.render_field_cell_width+1)]
-                if "O"+str(field_n+1) in self.fields.keys() or\
-                    "D"+str(field_n+1) in self.fields.keys():
+                field_contents = []
+                if "O"+str(field_n+1) in self.fields_payoffs.keys() or\
+                    "D"+str(field_n+1) in self.fields_payoffs.keys():
                     if field_n_content == []:
-                        field_n_content = ["(DESERT)",self.fields["D"+str(field_n+1)],
-                                            "(OASIS)",self.fields["O"+str(field_n+1)]]
+                        field_contents = ["(DESERT)",self.fields_payoffs["D"+str(field_n+1)],
+                                            "(OASIS)",self.fields_payoffs["O"+str(field_n+1)]]
                     elif field_n_content[0] in ["DESERT","OASIS"]:
-                        field_n_content +=[np.nan,"",""]
+                        #field_n_content +=[np.nan,"",""]
                         if field_n_content[0] == "OASIS":
-                            field_n_content[2]  = self.fields["O"+str(field_n+1)]
-                            field_n_content[3]  = "({string:.2f})".\
-                                format(string=self.fields["D"+str(field_n+1)])
+                            field_contents = ["OASIS","({string:.2f})".\
+                                format(string=self.fields_payoffs["O"+str(field_n+1)]),
+                                "(DESERT)",self.fields_payoffs["D"+str(field_n+1)]]
                         else:
-                            field_n_content[2]  = self.fields["D"+str(field_n+1)]
-                            field_n_content[3]  = "({string:.2f})".\
-                                format(string=self.fields["O"+str(field_n+1)])
-                        if "W"+str(field_n+1) in self.fields.keys():
-                            field_n_content[4]  = "(({string:.2f}))".\
-                                format(string=self.fields["W"+str(field_n+1)]) ## TODO: check if this is correct
-                    while len(field_n_content) < n_rows_cells: ##elongate the cell for the content to fit in the cell
-                        field_n_content.append("")
-                        if len(field_n_content) < n_rows_cells:
-                            field_n_content.insert(0,"")
+                            field_contents = ["DESERT","({string:.2f})".\
+                                format(string=self.fields_payoffs["D"+str(field_n+1)]),
+                                "(OASIS)",self.fields_payoffs["O"+str(field_n+1)]]
+                        if "W"+str(field_n+1) in self.fields_payoffs.keys():
+                            field_contents.append("(({string:.2f}))".\
+                                format(string=self.fields_payoffs["W"+str(field_n+1)])) ## TODO: check if this is correct
                 ## contents are rendereded for each cell row
                 if field_n_content == []:
                     pass
                 elif field_n_content[0] in ["DESERT","OASIS", "(DESERT)"]:
                     for i in range(len(field_n_content)):
-                        field_contents[i] = f"{field_n_content[i]:^{self.render_field_cell_width}s}{vertical_sign}"
+                        field_contents[i] = f"{field_contents[i]:^{self.render_field_cell_width}s}{vertical_sign}"
                 else:
                     for row_o in range(len(field_n_content)):
-                        if not self.black_white and field_n_content[row_o] == "Purple":
-                            field_n_content[row_o] = "White"
-                        if field_n_content[row_o] in self.moved or field_n_content[row_o] == "Black" and "White" in self.moved:
-                            field_contents[row_o] = f"[{field_n_content[row_o]:^{self.render_field_cell_width-2}s}]{vertical_sign}"
-                        else:
-                            field_contents[row_o] = f"{field_n_content[row_o]:^{self.render_field_cell_width}s}{vertical_sign}"
+                        camel = field_n_content[row_o]
+                        if not self.black_white and camel == "Purple":
+                            camel = "White"
+                        if camel in self.moved or camel == "Black" and "White" in self.moved:
+                            camel = f"[{camel}]"
+                        field_contents.append(f"{camel:^{self.render_field_cell_width}s}{vertical_sign}")
 
                 while len(field_contents) < n_rows_cells: ##elongate the cell for the content to fit in the cell
-                    field_contents.append("")
+                    field_contents.append(" "*self.render_field_cell_width+vertical_sign)
                     if len(field_contents) < n_rows_cells:
-                        field_contents.insert(0,"")
-                field_contents = field_contents + [horizontal_sign*(self.render_field_cell_width)]
+                        field_contents.insert(0," "*self.render_field_cell_width+vertical_sign)
+                field_contents = field_contents + [horizontal_sign*(self.render_field_cell_width+1)]
                 for row_m in range(n_rows_cells+1):
                     render_row = row_m+row_n*(n_rows_cells+1)+1
                     if column_n == 0:
@@ -371,7 +367,7 @@ class CamelUp():
         '''
         gap_margin = self.gap_margin
         
-        i = 0 if self.black_white else 2
+        i = 0 if not self.black_white else 2
         margins = np.array([3,4,4,4,3])+i
         ## if more than 4 players, lower the margins in the middle so two rows of players fit.
         if len(self.players) >4: 
@@ -393,8 +389,8 @@ class CamelUp():
 
         row_n = margins[0]
 
-        probabilities = pd.DataFrame(self.base_probabilities, index=self.Camels, columns=["First","Second","Lose"])
-        payoffs = pd.DataFrame(self.base_payoffs, index=self.Camels, columns=["5-Plate","3-Plate","2-Plate"])
+        probabilities = pd.DataFrame(self.base_probabilities, index=self.Camels[:5], columns=["First","Second","Lose"])
+        payoffs = pd.DataFrame(self.base_payoffs, index=self.Camels[:5], columns=["5-Plate","3-Plate","2-Plate"])
         prob_strings, payoffs_strings = format_tables(probabilities, payoffs, self.game_inventory, self.black_white)
         for row in range(len(prob_strings)):
             self.rendered_output[row_n] += " "*gap_margin + prob_strings[row]
@@ -409,16 +405,15 @@ class CamelUp():
         row_n = self.print_c(row_n)
 
         row_n += margins[3]
-        for row in range(len(self.players.values())):
-            self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(self.Camels)
+        self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(self.Camels)
         row_n += margins[4]
 
-        self.rendered_output.append([""],[" "*gap_margin + "Player Inventories and expected payoffs:"])
+        self.rendered_output.extend([""," "*gap_margin + "Player Inventories and expected payoffs:"])
 
         ### print player inventories and expected payoffs
         for player in self.players.values():
-            self.rendered_output.append([""],[" "*gap_margin + "## " +player.name+" ##"])
-            self.rendered_output.append([" "*gap_margin + "Inventory: "])
+            self.rendered_output.extend([""," "*gap_margin + "## " +player.name+" ##"])
+            self.rendered_output.append(" "*gap_margin + "Inventory: ")
             dice_counts = 0
             if "Diced" in player.inventory:
                 dice_counts = player.inventory.count("Diced")
@@ -430,7 +425,6 @@ class CamelUp():
                     continue
                 else:
                     self.rendered_output[-1] += f"{element}: {payoff}, "
-            self.rendered_output[-1] += "\n"
 
     def print_c(self, index = 0): ## DONE! 
         if index == 0:
@@ -443,7 +437,7 @@ class CamelUp():
         else:
             row_n = index
         self.rendered_output += [""]*3
-        if len(self.players) > 4:
+        if len(self.players) > 4 and index == 0:
             self.rendered_output += [""]*3
         self.rendered_output[row_n] += " "*gap_margin + "Players   "
         lengths = [max(len(player.name)+2,7) for player in self.players.values()]
@@ -753,12 +747,13 @@ class CamelUp():
 
         start_players = copy.deepcopy(self.players)
         for i in legal_fields:
-            fields["D"+str(i)] = field.copy()
-            fields["D"+str(i)][i] = ["DESERT",player]
-            fields["D"+str(i)], _ = render_field(fields["D"+str(i)],start_players)
-            fields["O"+str(i)] = field.copy()
-            fields["O"+str(i)][i] = ["OASIS",player]
-            fields["O"+str(i)], _ = render_field(fields["O"+str(i)],start_players)
+            j = i+1
+            fields["D"+str(j)] = field.copy()
+            fields["D"+str(j)][i] = ["DESERT",player]
+            fields["D"+str(j)], _ = render_field(fields["D"+str(j)],start_players)
+            fields["O"+str(j)] = field.copy()
+            fields["O"+str(j)][i] = ["OASIS",player]
+            fields["O"+str(j)], _ = render_field(fields["O"+str(j)],start_players)
 
         ## camels diced
 
@@ -829,7 +824,7 @@ class CamelUp():
             if len(self.moved) == 5:
                 self.cl() #end of round function
                 if self.user_guide:
-                    self.print_usage_guide()
+                    self.print_i()
             index += 1
         self.game_end() #end of game
 
@@ -929,20 +924,11 @@ class CamelUp():
         col0_len = 20
         print(print_adj("Action",10)+" | "+print_adj("Take top bet:",col0_len-5)+" | "+\
               print_adj("Throw dice:",col0_len-5)+" | "+print_adj("Throw dice random:",col0_len)+" | "+\
-              print_adj("Set Oasis/Desert:",col0_len)+" | "+print_adj("Take final bet:",col0_len)+"\n"+\
-                  "–"*(10+5*col0_len))
-        print(print_adj("Type",10,"c")+" | "+print_adj("color",col0_len-5,"c")+" | "+\
+              print_adj("Set Oasis/Desert:",col0_len)+" | "+print_adj("Take final bet:",col0_len)+" | "+print_adj("Exit:",col0_len)+"\n"+\
+                  "–"*(10+5*col0_len) )
+        print(print_adj("Type",10,"c")+" | "+print_adj("[color]",col0_len-5,"c")+" | "+\
               print_adj("t",col0_len-5,"c")+" | "+ print_adj("r",col0_len,"c")+" | "+
-              print_adj("o, d or w",col0_len,"c")+" | "+print_adj("f",col0_len,"c"))
-    
-    def print_usage_guide(self):
-        print("\nUsage Guide:\n")
-        print("t: Throw a camel, picking color and number subsequently")
-        print("r: Throw a camel randomly")
-        print("o: Set Oasis, picking field subsequently")
-        print("d: Set Desert, picking field subsequently")
-        print("w: Withdraw desert or oasisplate")
-        print("f: Set final bet on winner or loser\n\n")
+              print_adj("o, d or w",col0_len,"c")+" | "+print_adj("f",col0_len,"c") + " | "+print_adj("q",col0_len,"c"))
 
     def make_a_move(self,player):
         # self.print_game(True,True)
@@ -955,16 +941,18 @@ class CamelUp():
                 CNM+=print_adj(i,8,"l")+", "
         self.one_turn(print_option=False,OD=True,player=player)
         self.print_game(True, True) # prints game with field and payoffs and player gains
-        self.print_i()
-        self.print_c()
-        print_hint2("Camels not moved: "+CNM[:-2])
+        #self.print_c()
+        #print_hint2("Camels not moved: "+CNM[:-2])
         print_hint2(player+"'s move")
         if self.user_guide:
-            self.print_usage_guide()
+            self.print_i()
+        sys.stdout.flush()
         while True:
             print("Move t for throw a camel, r for random throw, o or d or w for desert, oasis, [Camel] for bet, f for final bet")
             move = input()
-            if move == "t":
+            if move == "q":
+                sys.exit()
+            elif move == "t":
                 print("Which camel?")
                 move = input()
                 if move.capitalize() in self.Camels:
