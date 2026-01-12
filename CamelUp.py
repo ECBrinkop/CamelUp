@@ -302,24 +302,24 @@ class CamelUp():
                 field_n = self.field_structure[row_n][column_n] ## get field number
                 field_n_content = copy.deepcopy(self.game_field[field_n])
                 field_contents = []
-                if "O"+str(field_n+1) in self.fields_payoffs.keys() or\
-                    "D"+str(field_n+1) in self.fields_payoffs.keys():
+                if "O"+str(field_n) in self.fields_payoffs.keys() or\
+                    "D"+str(field_n) in self.fields_payoffs.keys():
                     if field_n_content == []:
-                        field_contents = ["(DESERT)",self.fields_payoffs["D"+str(field_n+1)],
-                                            "(OASIS)",self.fields_payoffs["O"+str(field_n+1)]]
+                        field_contents = ["(DESERT)",self.fields_payoffs["D"+str(field_n)],
+                                            "(OASIS)",self.fields_payoffs["O"+str(field_n)]]
                     elif field_n_content[0] in ["DESERT","OASIS"]:
                         #field_n_content +=[np.nan,"",""]
                         if field_n_content[0] == "OASIS":
                             field_contents = ["OASIS","({string:.2f})".\
-                                format(string=self.fields_payoffs["O"+str(field_n+1)]),
-                                "(DESERT)",self.fields_payoffs["D"+str(field_n+1)]]
+                                format(string=self.fields_payoffs["O"+str(field_n)]),
+                                "(DESERT)",self.fields_payoffs["D"+str(field_n)]]
                         else:
                             field_contents = ["DESERT","({string:.2f})".\
-                                format(string=self.fields_payoffs["D"+str(field_n+1)]),
-                                "(OASIS)",self.fields_payoffs["O"+str(field_n+1)]]
+                                format(string=self.fields_payoffs["D"+str(field_n)]),
+                                "(OASIS)",self.fields_payoffs["O"+str(field_n)]]
                         if "W"+str(field_n+1) in self.fields_payoffs.keys():
                             field_contents.append("(({string:.2f}))".\
-                                format(string=self.fields_payoffs["W"+str(field_n+1)])) ## TODO: check if this is correct
+                                format(string=self.fields_payoffs["W"+str(field_n)])) ## TODO: check if this is correct
                 ## contents are rendereded for each cell row
                 if field_n_content == []:
                     pass
@@ -643,13 +643,13 @@ class CamelUp():
         ## Oasis and Desert value optimisation.
         if OD:
             ## calculate desert value for player for all legal fields:
-            fields_payoffs = self._desert_iterator(player)
+            self.DO_fields_payoffs = self._desert_iterator(player) ## prepared for it does not have to be rerun every turn. !!! implement this!
             ## returns a dictionary of payoffs
 
             ## delta base is the expected payoff of the player's plate at the start of the turn.
             delta_base = self.base_DO_hits[player_index]
-            for i in fields_payoffs.keys():
-                field_payoff = fields_payoffs[i]
+            for i in self.DO_fields_payoffs.keys():
+                field_payoff = self.DO_fields_payoffs[i]
                 delta = delta_base + -field_payoff[1][player_index] ## create copy of delta base
                 ## THIS player additionally gains, if the other players lose hits.
                 delta_other_players_hits = np.delete(self.base_DO_hits, player_index)-np.delete(field_payoff[1], player_index)
@@ -668,6 +668,7 @@ class CamelUp():
                         delta += delta_other_players_bets
 
                 self.fields_payoffs[i] = delta
+            print(self.fields_payoffs)
         ## game should be printed only after calculations for deserts and oases are complete and expected payoffs are calculated.
         if print_option:
             self.print_game(True,True)
@@ -747,7 +748,7 @@ class CamelUp():
 
         start_players = copy.deepcopy(self.players)
         for i in legal_fields:
-            j = i+1
+            j = i#+1
             fields["D"+str(j)] = field.copy()
             fields["D"+str(j)][i] = ["DESERT",player]
             fields["D"+str(j)], _ = render_field(fields["D"+str(j)],start_players)
