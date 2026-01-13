@@ -118,6 +118,7 @@ class CamelUp():
 
         self.total_width = (5*self.render_field_cell_width+6)
         self.user_guide=user_guide
+        self.timers = []
         self.fields_payoffs = {}
         self.game_winner = []
         self.game_loser = []
@@ -423,7 +424,7 @@ class CamelUp():
                 dice_counts = player.inventory.count("Diced")
             self.rendered_output[-1] += f"Diced: {dice_counts}, "
             if player.plate_pos != None:
-                self.rendered_output[-1] += f"Plate[{player.plate_pos}]: {player.plate_value}, "
+                self.rendered_output[-1] += f"Plate[{player.plate_pos+1}]: {player.plate_value}, "
             for element, payoff in zip(player.inventory, player.inventory_payoffs):
                 if element == "Diced":
                     continue
@@ -616,7 +617,7 @@ class CamelUp():
         ## ideally directly usable in field printing.
         
         ## create empty filter matrices for player inventories
-        player_inventory_filter = [np.zeros((5,3))]*len(self.players)
+        self.player_inventory_filter = [np.zeros((5,3))]*len(self.players)
 
         ## calculate expected payoffs for player inventories
         player_index = 0
@@ -632,7 +633,7 @@ class CamelUp():
                     color_index = self.Camels.index(color)
                     number_index = [5,3,2].index(number)
                     EV_plate = self.base_payoffs[color_index, number_index]
-                    player_inventory_filter[player_index][color_index, number_index] = 1
+                    self.player_inventory_filter[player_index][color_index, number_index] = 1
                     self.players[i].inventory_payoffs.append(EV_plate)
                     e_payoff += EV_plate
             if self.players[i].plate_pos != None:
@@ -647,33 +648,37 @@ class CamelUp():
         player_index = list(self.players.keys()).index(player)
         ## Oasis and Desert value optimisation.
         if OD:
+            self.timers.append({"desert_iterator": time.time()})
             ## calculate desert value for player for all legal fields:
             self.DO_fields_payoffs = self._desert_iterator(player) ## prepared for it does not have to be rerun every turn. !!! implement this!
             ## returns a dictionary of payoffs
 
             ## delta base is the expected payoff of the player's plate at the start of the turn.
-            delta_base = self.base_DO_hits[player_index,0]
             for i in self.DO_fields_payoffs.keys():
                 field_payoff = self.DO_fields_payoffs[i]
-                delta = delta_base + -field_payoff[1][player_index] ## create copy of delta base
+                ## delta base is the expected payoff of the players plate minus the base payoff of the plate of the player.
+                delta = -self.base_DO_hits[player_index,0] +field_payoff[1][player_index] ## create copy of delta base
                 ## THIS player additionally gains, if the other players lose hits.
                 delta_other_players_hits = np.delete(self.base_DO_hits, player_index)-np.delete(field_payoff[1], player_index)
+
+                delta+=np.sum(delta_other_players_hits)
 
                 ## Additionally, THIS player gains the deltas in his expected payoffs:
                 current_payoffs = np.matmul(field_payoff[0],np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
                 delta_payoff_matrix = current_payoffs-self.base_payoffs
-                delta_inventory_payoffs = np.sum(delta_payoff_matrix*player_inventory_filter[player_index])
+                delta_inventory_payoffs = np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index])
                 delta += delta_inventory_payoffs
 
                 ## Finally, the player gains the expected payoffs of other players bets with the old plate, 
                 ## but loses the expected payoffs of other players bets with the new plate.
-                for i in range(len(self.players)):
-                    if i != player_index:
-                        delta_other_players_bets = -np.sum(delta_payoff_matrix*player_inventory_filter[i])
+                for player_index_other in range(len(self.players)):
+                    if player_index_other != player_index:
+                        delta_other_players_bets = -np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index_other])
                         delta += delta_other_players_bets
 
                 self.fields_payoffs[i] = delta
             print(self.fields_payoffs)
+            self.timers[-1]["desert_iterator"] = time.time() - self.timers[-1]["desert_iterator"]
         ## game should be printed only after calculations for deserts and oases are complete and expected payoffs are calculated.
         if print_option:
             self.print_game(True,True)
@@ -709,7 +714,7 @@ class CamelUp():
                 j = i#+1
                 W_field = "W"+str(j)
                 field[i] = []
-                fields[W_field] = render_field(field, start_players)
+                fields[W_field], _  = render_field(field, start_players)
                 break
 
         ## calculate all possible fields for desert and oasis
@@ -1173,7 +1178,7 @@ def format_tables(probabilities: pd.DataFrame, payoffs: pd.DataFrame, game_inven
 # Focus: Reduce compile time by reducing function complexity and size.
 #
 
-def _camel_index_maps(rendered_field, camels_not_thrown):
+def _camel_index_maps(rendered_field:np.ndarray, camels_not_thrown:list):
     """
     Return initial row/col indices of all relevant camels.
     Not jitted; helper.
@@ -1181,13 +1186,24 @@ def _camel_index_maps(rendered_field, camels_not_thrown):
     camel_row_idx_base = np.zeros(8, dtype=np.int64)
     camel_col_idx_base = np.zeros(8, dtype=np.int64)
     if 6 in camels_not_thrown:  # Extended version (7 camels)
-        camel_ids = range(1, 8)
+        camel_ids = np.arange(1, 8)
     else:
-        camel_ids = range(1, 6)
+        camel_ids = np.arange(1, 6)
+    #print("rendered_field:",rendered_field)
+    #print("camel_ids:",camel_ids)
+    #print("camels_not_thrown:",camels_not_thrown)
     for i in camel_ids:
         pos = np.argwhere(rendered_field == i)
-        camel_row_idx_base[i] = pos[0][0]
-        camel_col_idx_base[i] = pos[0][1]
+        try:
+            camel_row_idx_base[i] = pos[0][0]
+            camel_col_idx_base[i] = pos[0][1]
+        except Exception as e:
+            print(rendered_field)
+            print(i)
+            print(pos)
+            print(camel_ids)
+            print(e)
+            raise Exception("Unexpected error in _camel_index_maps")
     return camel_row_idx_base, camel_col_idx_base
 
 @nb.njit(cache=True, parallel=True)
