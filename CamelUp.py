@@ -392,9 +392,8 @@ class CamelUp():
         if len(self.players) >4: 
             margins[1:4] -= 1
         margins = margins.tolist()
-        ## !!! marker 
 
-        width = self.print_dim[1]-self.total_width
+        width = 65
         header_statement = "Win Probabilities"
         self.rendered_header[0] += "{string:^{width}s}".format(\
                                     string="#"*(len(header_statement)+2*4),
@@ -425,7 +424,7 @@ class CamelUp():
 
         row_n += margins[3]
         camels_not_diced = [i for i in self.Camels if i not in self.moved if i not in ["BLACK","WHITE"]]
-        if "WHITE" in self.moved:
+        if "WHITE" not in self.moved and self.black_white:
             camels_not_diced.append("BLACK/WHITE")
         self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(camels_not_diced)
         row_n += margins[4]
@@ -493,6 +492,7 @@ class CamelUp():
             return row_n
 
     def moved_f(self,camel):  ## Done!
+        camel = camel.upper()
         if camel not in self.moved and camel in self.Camels:
             if camel == "BLACK":
                 self.moved.append("WHITE")
@@ -586,12 +586,13 @@ class CamelUp():
         Camels_die_rendered = [self.mask[i] for i in Camels_die]
         ## handle special case of black and white camel
         if self.black_white:
-            if 6 in Camels_die_rendered and 7 in Camels_die_rendered:
-                Camels_die_rendered.remove(7)
-            elif 6 not in Camels_die_rendered and 7 in Camels_die_rendered:
-                Camels_die_rendered.remove(7)
-            else:
-                Camels_die_rendered.remove(6)
+            ## removed because this handling is diverted to the moved_f method
+            #if 6 in Camels_die_rendered and 7 in Camels_die_rendered:
+            #    Camels_die_rendered.remove(7)
+            #elif 6 not in Camels_die_rendered and 7 in Camels_die_rendered:
+            #    Camels_die_rendered.remove(7)
+            #else:
+            #    Camels_die_rendered.remove(6)
             n_camels_thrown = 6-len(Camels_die_rendered)
         else:
             n_camels_thrown = 5-len(Camels_die_rendered)
@@ -647,7 +648,7 @@ class CamelUp():
         ## ideally directly usable in field printing.
         
         ## create empty filter matrices for player inventories
-        self.player_inventory_filter = [np.zeros((5,3))]*len(self.players)
+        self.player_inventory_filter = np.zeros((len(self.players),5,3))
 
         ## calculate expected payoffs for player inventories
         player_index = 0
@@ -663,7 +664,7 @@ class CamelUp():
                     color_index = self.Camels.index(color)
                     number_index = [5,3,2].index(number)
                     EV_plate = self.base_payoffs[color_index, number_index]
-                    self.player_inventory_filter[player_index][color_index, number_index] = 1
+                    self.player_inventory_filter[player_index,color_index, number_index] = 1
                     self.players[i].inventory_payoffs.append(EV_plate)
                     e_payoff += EV_plate
             if self.players[i].plate_pos != None:
@@ -696,15 +697,15 @@ class CamelUp():
                 ## Additionally, THIS player gains the deltas in his expected payoffs:
                 current_payoffs = np.matmul(field_payoff[0],np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
                 delta_payoff_matrix = current_payoffs-self.base_payoffs
-                delta_inventory_payoffs = -np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index])
+                delta_inventory_payoffs = np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index,:,:])
                 delta += delta_inventory_payoffs
 
                 ## Finally, the player gains the expected payoffs of other players bets with the old plate, 
                 ## but loses the expected payoffs of other players bets with the new plate.
                 for player_index_other in range(len(self.players)):
                     if player_index_other != player_index:
-                        delta_other_players_bets = np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index_other])
-                        delta += delta_other_players_bets
+                        delta_other_players_bets = np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index_other,:,:])
+                        delta -= delta_other_players_bets
 
                 self.fields_payoffs[i] = delta
             #print(self.fields_payoffs)
