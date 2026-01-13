@@ -1048,7 +1048,8 @@ class CamelUp():
         # self.rec=True
 
 class Field():
-    Camels = CamelUp.extended_Camels.copy()
+    Camels = CamelUp.standard_Camels + ["Black", "White"]
+    Camels = tuple(Camels)
     def __init__(self,field=[],players=[],moved=[]):
         self.game_field = field
         self.players = players
