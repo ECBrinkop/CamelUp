@@ -334,6 +334,7 @@ class CamelUp():
                     #    for i in range(len(field_n_content)):
                     #        field_contents[i] = f"{field_contents[i]:^{self.render_field_cell_width}s}{vertical_sign}"
                 else:
+                    field_n_content = field_n_content[::-1]
                     for row_o in range(len(field_n_content)):
                         camel = field_n_content[row_o]
                         if not self.black_white and camel == "Purple":
