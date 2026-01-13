@@ -440,7 +440,7 @@ class CamelUp():
                 dice_counts = player.inventory.count("Diced")
             self.rendered_output[-1] += f"Diced: {dice_counts}, "
             if player.plate_pos != None:
-                self.rendered_output[-1] += f"Plate[{player.plate_pos+1}]: {player.plate_value}, "
+                self.rendered_output[-1] += f"D/O-plate[{player.plate_pos+1}]: {player.plate_value}, "
             for element, payoff in zip(player.inventory, player.inventory_payoffs):
                 if element == "Diced":
                     continue
@@ -503,7 +503,7 @@ class CamelUp():
         """
         This function clears the game and prepares for a new round.
         """
-        self.one_turn(False)
+        self.one_turn(False,player = list(self.players.keys())[0])
         self.moved = []
         for i in range(16):
             if "OASIS" in self.game_field[i] or \
@@ -600,7 +600,7 @@ class CamelUp():
 
     def one_turn(self,print_option=True,OD=False,player = ""): ## Done! untested!!!
         '''
-        This function manages all the payoffs
+        This function manages all the payoffs.
         '''
         ## time one turn start: field rendering, game inventory matrix creation
         self.timers.append({"one_turn_start": time.time()})
@@ -654,10 +654,11 @@ class CamelUp():
         player_index = 0
         for i in self.players.keys():
             e_payoff = 0
-            for j in self.players[i].inventory:
+            self.players[i].inventory_payoffs = np.zeros(len(self.players[i].inventory))
+            for index, j in enumerate(self.players[i].inventory):
                 if j == "Diced":
                     e_payoff+=1
-                    self.players[i].inventory_payoffs.append(1)
+                    self.players[i].inventory_payoffs[index] = 1
                 else:
                     color, number = j.split(" ")
                     number = int(number[1])
@@ -665,7 +666,7 @@ class CamelUp():
                     number_index = [5,3,2].index(number)
                     EV_plate = self.base_payoffs[color_index, number_index]
                     self.player_inventory_filter[player_index,color_index, number_index] = 1
-                    self.players[i].inventory_payoffs.append(EV_plate)
+                    self.players[i].inventory_payoffs[index] = EV_plate
                     e_payoff += EV_plate
             if self.players[i].plate_pos != None:
                 expeted_hits = self.base_DO_hits[player_index,0]
@@ -1378,10 +1379,19 @@ def sim_all_moves(
     draw_n_camels = len(camels_not_thrown)
     if len_all_camels > 5:
         draw_n_camels -= 1
+    camel_row_idx_base, camel_col_idx_base = _camel_index_maps(rendered_field, camels_not_thrown)
     if draw_n_camels <= 0:
         if verbose:
             print("No more camels can be drawn (draw_n_camels == 0).")
-        return np.zeros((5, 3), dtype=np.float64), np.zeros((n_players, 1), dtype=np.float64), 0.0
+        ## here win probs need to be rendered for end of round.
+        positions = [camel_row_idx_base[i]*7+ camel_col_idx_base[i] for i in range(1,6)]
+        sorted_indices = sorted(range(len(positions)), key=lambda k: positions[k], reverse=True)
+        win_probs = np.zeros((5, 3), dtype=np.float64)
+        win_probs[sorted_indices[0], 0] = 1.0
+        win_probs[sorted_indices[1], 1] = 1.0
+        for i in range(2,5):
+            win_probs[sorted_indices[i], 2] = 1.0
+        return win_probs, np.zeros((n_players, 1), dtype=np.float64), 0.0
 
     all_dice_permutations = _all_dice_permutations(draw_n_camels)
     camel_permutations = _all_camel_permutations(np.array(camels_not_thrown, dtype=np.int64))
@@ -1401,7 +1411,6 @@ def sim_all_moves(
         all_camel_permutations = camel_permutations
     if verbose:
         print("Number of full permutations: ", all_camel_permutations.shape[0] * all_dice_permutations.shape[0])
-    camel_row_idx_base, camel_col_idx_base = _camel_index_maps(rendered_field, camels_not_thrown)
     n_perm = len(all_camel_permutations)
     if len_all_camels == 6:
         extra_dim = 3 * 7
