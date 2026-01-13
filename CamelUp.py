@@ -636,9 +636,10 @@ class CamelUp():
                     self.players[i].inventory_payoffs.append(EV_plate)
                     e_payoff += EV_plate
             if self.players[i].plate_pos != None:
-                expeted_hits = self.base_DO_hits[player_index]
+                expeted_hits = self.base_DO_hits[player_index,0]
                 e_payoff += expeted_hits
                 self.players[i].plate_value = expeted_hits
+            #print("e_payoff:",e_payoff)
             self.players[i].expected_payoff = round(e_payoff,2)
             player_index += 1
         
@@ -651,7 +652,7 @@ class CamelUp():
             ## returns a dictionary of payoffs
 
             ## delta base is the expected payoff of the player's plate at the start of the turn.
-            delta_base = self.base_DO_hits[player_index]
+            delta_base = self.base_DO_hits[player_index,0]
             for i in self.DO_fields_payoffs.keys():
                 field_payoff = self.DO_fields_payoffs[i]
                 delta = delta_base + -field_payoff[1][player_index] ## create copy of delta base
@@ -1327,7 +1328,7 @@ def sim_all_moves(
     if draw_n_camels <= 0:
         if verbose:
             print("No more camels can be drawn (draw_n_camels == 0).")
-        return np.zeros((5, 3), dtype=np.float64), np.zeros((n_players, 3), dtype=np.float64), 0.0
+        return np.zeros((5, 3), dtype=np.float64), np.zeros((n_players, 1), dtype=np.float64), 0.0
 
     all_dice_permutations = _all_dice_permutations(draw_n_camels)
     camel_permutations = _all_camel_permutations(np.array(camels_not_thrown, dtype=np.int64))
