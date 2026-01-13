@@ -91,7 +91,7 @@ class CamelUp():
         '═════════════════════════════════════════════════════════════════════']
     print_dim_standard = [31,76]
     print_dim_extended = [41,126]
-    mask = {"PURPLE":1,"BLUE":2,"ORANGE":3,"YELLOW":4,"GREEN":5, "WHITE":6, "BLACK":7}
+    mask = {"PURPLE":1, "BLUE":2, "ORANGE":3, "YELLOW":4, "GREEN":5, "WHITE":6, "BLACK":7}
     render_field_cell_width_standard = 12
     render_field_cell_width_extended = 22
     def __init__(self,
@@ -194,12 +194,12 @@ class CamelUp():
                 self.game_field[i] = []
                 self.players[player].plate_pos = None
                 break
-        plate = plate.capitalize()
+        plate = plate.upper()
         while True:
             if plate == "":
                 print(player+"'s Oasis/Desert on the field?\n 'o' for OASIS, 'd' for DESERT, "+\
                     "'w' to WITHDRAW plate")
-                plate = input().capitalize()
+                plate = input().upper()
             if plate in ["O", "OASIS"]:
                 plate = "OASIS"
                 break
@@ -273,13 +273,13 @@ class CamelUp():
         header_statement = "Current Field" ## header statement for the field
         self.rendered_header[0] += "{string:^{width}s}".format(\
                                     string="#"*(len(header_statement)+2*4),
-                                    width = total_width-18) ## central header directly above field for all 3 rows
+                                    width = total_width) ## central header directly above field for all 3 rows
         self.rendered_header[1] += "{string:^{width}s}".format(\
                                     string="##  "+header_statement+"  ##",
-                                    width = total_width-18)
+                                    width = total_width)
         self.rendered_header[2] += "{string:^{width}s}".format(\
                                     string="#"*(len(header_statement)+2*4),
-                                    width = total_width-18)
+                                    width = total_width)
 
         ## field rendering
         vertical_sign = "║" if self.black_white else "|"
@@ -515,7 +515,7 @@ class CamelUp():
         self.print_c()
 
     def move(self,camel,steps): ## Done!
-        camel = camel.capitalize()
+        camel = camel.upper()
         if camel not in self.Camels:
             print("Invalid Camel!")
             return 0
@@ -696,14 +696,14 @@ class CamelUp():
                 ## Additionally, THIS player gains the deltas in his expected payoffs:
                 current_payoffs = np.matmul(field_payoff[0],np.array([[5,3,2],[1,1,1],[-1,-1,-1]]))
                 delta_payoff_matrix = current_payoffs-self.base_payoffs
-                delta_inventory_payoffs = np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index])
+                delta_inventory_payoffs = -np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index])
                 delta += delta_inventory_payoffs
 
                 ## Finally, the player gains the expected payoffs of other players bets with the old plate, 
                 ## but loses the expected payoffs of other players bets with the new plate.
                 for player_index_other in range(len(self.players)):
                     if player_index_other != player_index:
-                        delta_other_players_bets = -np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index_other])
+                        delta_other_players_bets = np.sum(delta_payoff_matrix*self.player_inventory_filter[player_index_other])
                         delta += delta_other_players_bets
 
                 self.fields_payoffs[i] = delta
@@ -830,7 +830,7 @@ class CamelUp():
         steps = randrange(1,4)
         lenstr = 6+7+7+1+len(camel)
         print("\n"+"#"*lenstr+"\nCamel "+camel+" moves "+str(steps)+" steps!\n"+"#"*lenstr+"\n")
-        self.move(camel.capitalize(),steps)
+        self.move(camel.upper(),steps)
     
     def game_not_end(self): ## DONE!
         if len(set([*self.game_field[16],*self.game_field[17],*self.game_field[18]]).difference(set(["BLACK","WHITE"]))) == 0:
@@ -860,8 +860,7 @@ class CamelUp():
         while self.game_not_end():
             player = list(self.players.keys())[index%n_players]
             self.make_a_move(player)
-            camels_thrown, n_camels_moving = self.render_camels_die(False)
-            if n_camels_moving == 0 or n_camels_moving == 1 and self.black_white:
+            if len(self.moved) == 5:
                 self.cl() #end of round function
                 if self.user_guide:
                     self.print_i()
@@ -991,74 +990,75 @@ class CamelUp():
         sys.stdout.flush()
         while True:
             print("Move t for throw a camel, r for random throw, o or d or w for desert, oasis, [Camel] for bet, f for final bet")
-            move = input()
-            if move == "q":
+            move_input = input()
+            move = move_input.upper()
+            if move == "Q":
                 sys.exit()
-            elif move == "t":
+            elif move == "T":
                 print("Which camel?")
                 move = input()
-                if move.capitalize() in self.Camels:
-                    dummy_name = move.capitalize()
+                if move.upper() in self.Camels:
+                    dummy_name = move
                     if dummy_name == "BLACK":
                         dummy_name = "WHITE"
                     if dummy_name not in self.moved:
-                        print("How many steps did Camel "+move.capitalize()+" move?")
+                        print("How many steps did Camel "+move_input+" move?")
                         moves = input()
                         if moves not in ["1","2","3"]:
                             print("Illegal number of moves, retry!")
                         else:
                             print_hint2(player+" has diced and gets a coin plate!")
                             self.players[player].inventory.append("Diced")
-                            self.move(move.capitalize(),int(moves))
+                            self.move(move,int(moves))
                             break
                     else:
-                        print("Camel "+move+" already moved! Retry!")
+                        print("Camel "+move_input+" already moved! Retry!")
                         print(CNM)
                 else:
-                    print(move.capitalize()+" is not a camel! Retry!")
-            elif move.capitalize() in self.Camels:
+                    print(move_input+" is not a camel! Retry!")
+            elif move in self.Camels[:5]:
                 plates = []
                 for i in self.game_inventory:
-                    if move.capitalize() in i:
+                    if move in i:
                         plates.append(int(i[-2]))
                 if len(plates) == 0:
-                    print("No plates of "+move.capitalize()+" remain! Retry!")
+                    print("No plates of "+move_input+" remain! Retry!")
                 else:
-                    plate = move.capitalize()+" ["+str(int(max(plates)))+"]"
+                    plate = move+" ["+str(int(max(plates)))+"]"
                     print_hint2(player + " took PLATE "+plate+"!")
                     self.players[player].inventory.append(plate)
                     del self.game_inventory[self.game_inventory.index(plate)]
                     break
-            elif move == "r":
+            elif move == "R":
                 self.die_r()
                 self.players[player].inventory.append("Diced")
                 break
-            elif move in ["o","d","w"]:
+            elif move in ["O","D","W"]:
                 self.OasisDesert(player,move)
                 break
-            elif move == "f":
+            elif move == "F":
                 print("Which Camel do you want to set?")
-                move = input()
-                if move.capitalize() not in self.players[player].cards:
-                    print(player + " doesn't have camel " + move.capitalize() + " (anymore)!")
+                move = input().upper()
+                if move not in self.players[player].cards:
+                    print(player + " doesn't have camel " + move + " (anymore)!")
                 else:
                     print("Winner or Loser?\t\ttype w for winner and l for loser.")
                     move2 = input()
                     if move2 not in ["l","w"]:
                         print("Illegal type of bet! Retry!")
                     elif move2 == "l":
-                        print_hint2(player + " has bet "+move.capitalize()+" as the game loser!")
-                        del self.players[player].cards[self.players[player].cards.index(move.capitalize())]
-                        self.game_loser.append([player,move.capitalize()])
+                        print_hint2(player + " has bet "+move+" as the game loser!")
+                        del self.players[player].cards[self.players[player].cards.index(move.upper())]
+                        self.game_loser.append([player,move])
                         break
                     elif move2 == "w":
-                        print_hint2(player + " has bet "+move.capitalize()+" as the game WINNER!")
-                        del self.players[player].cards[self.players[player].cards.index(move.capitalize())]
-                        self.game_winner.append([player,move.capitalize()])
+                        print_hint2(player + " has bet "+move+" as the game WINNER!")
+                        del self.players[player].cards[self.players[player].cards.index(move)]
+                        self.game_winner.append([player,move])
                         break
             else:
-                print(move +" is not a legal move. Check Choices!")
-        if move in ["o","d","w","r","t"]:
+                print(move_input +" is not a legal move. Check Choices!")
+        if move in ["O","D","W","R","T"]:
             self.rec=True
         # self.rec=True
 
