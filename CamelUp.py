@@ -31,12 +31,12 @@ class CamelUp():
     
     Class lists include:
         Camels: 
-            5 Camels (Purple, Blue, Orange, Green, Yellow)
+            5 Camels (PURPLE, BLUE, ORANGE, GREEN, YELLOW)
         Inventory:
             Betting Plates for each of the Camels
     '''
     gap_margin = 5
-    standard_Camels = ["Purple", "Blue", "Orange", "Yellow", "Green"]
+    standard_Camels = ["PURPLE", "BLUE", "ORANGE", "YELLOW", "GREEN"]
     standard_Inventory = [] # contains 
     for i in standard_Camels:
         standard_Inventory.extend([i+" [5]",i+" [3]",i+" [2]"])
@@ -91,7 +91,7 @@ class CamelUp():
         '═════════════════════════════════════════════════════════════════════']
     print_dim_standard = [31,76]
     print_dim_extended = [41,126]
-    mask = {"Purple":1,"Blue":2,"Orange":3,"Yellow":4,"Green":5, "White":6, "Black":7}
+    mask = {"PURPLE":1,"BLUE":2,"ORANGE":3,"YELLOW":4,"GREEN":5, "WHITE":6, "BLACK":7}
     render_field_cell_width_standard = 12
     render_field_cell_width_extended = 22
     def __init__(self,
@@ -109,8 +109,8 @@ class CamelUp():
 
         ## settings if extended game is played
         if self.black_white:
-            self.Camels.append("Black")
-            self.Camels.append("White")
+            self.Camels.append("BLACK")
+            self.Camels.append("WHITE")
             self.Inventory.extend([f"{i} [2]" for i in self.standard_Camels])
             self.render_field_cell_width = self.render_field_cell_width_extended
             self.print_dim = self.print_dim_extended
@@ -225,11 +225,11 @@ class CamelUp():
                     print("Invalid field, retry!")
             else:
                 self.game_field[pos] = [plate,player]
-                if str(pos+1)+"O" in self.fields.keys():
+                if "O"+str(pos) in self.fields.keys():
                     if plate == "OASIS":
-                        self.game_field[pos]+=[self.fields[str(pos+1)+"O"]]
+                        self.game_field[pos]+=[self.fields["O"+str(pos)]]
                     else:
-                        self.game_field[pos]+=[self.fields[str(pos+1)+"D"]]
+                        self.game_field[pos]+=[self.fields["D"+str(pos)]]
                 self.players[player].plate_pos = pos
                 break
         # self.print_game()
@@ -340,9 +340,9 @@ class CamelUp():
                     field_n_content = field_n_content[::-1]
                     for row_o in range(len(field_n_content)):
                         camel = field_n_content[row_o]
-                        if not self.black_white and camel == "Purple":
-                            camel = "White"
-                        if camel in self.moved or camel == "Black" and "White" in self.moved:
+                        if not self.black_white and camel == "PURPLE":
+                            camel = "WHITE"
+                        if camel in self.moved or camel == "BLACK" and "WHITE" in self.moved:
                             camel = f"[{camel}]"
                         field_contents.append(f"{camel:^{self.render_field_cell_width}s}{vertical_sign}")
 
@@ -424,7 +424,10 @@ class CamelUp():
         row_n = self.print_c(row_n)
 
         row_n += margins[3]
-        self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join([i for i in self.Camels if i not in self.moved])
+        camels_not_diced = [i for i in self.Camels if i not in self.moved if i not in ["BLACK","WHITE"]]
+        if "WHITE" in self.moved:
+            camels_not_diced.append("BLACK/WHITE")
+        self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(camels_not_diced)
         row_n += margins[4]
 
         self.rendered_output.extend([""," "*gap_margin + "Player Inventories and expected payoffs:"])
@@ -491,11 +494,10 @@ class CamelUp():
 
     def moved_f(self,camel):  ## Done!
         if camel not in self.moved and camel in self.Camels:
-            self.moved.append(camel)
-            if camel == "Black":
-                self.moved.append("White")
-            elif camel == "White":
-                self.moved.append("Black")
+            if camel == "BLACK":
+                self.moved.append("WHITE")
+            else:
+                self.moved.append(camel)
 
     def cl(self): ## DONE! 
         """
@@ -513,6 +515,7 @@ class CamelUp():
         self.print_c()
 
     def move(self,camel,steps): ## Done!
+        camel = camel.capitalize()
         if camel not in self.Camels:
             print("Invalid Camel!")
             return 0
@@ -523,7 +526,7 @@ class CamelUp():
                 index = self.game_field[j].index(camel)
                 moving_camels = self.game_field[j][index:]
                 self.game_field[j] = self.game_field[j][:index]
-                if camel not in ["Black","White"]:
+                if camel not in ["BLACK","WHITE"]:
                     field = j + steps
                 else:
                     field = j - steps
@@ -532,7 +535,7 @@ class CamelUp():
             player = self.game_field[field][1]
             print("#"*len(player)+"#############\n"+player+" gets a coin!\n"+"#"*len(player)+"#############\n")
             self.players[self.game_field[field][1]].coins+=1
-            if camel not in ["Black","White"]:
+            if camel not in ["BLACK","WHITE"]:
                 field += 1
             else:
                 field -= 1
@@ -541,7 +544,7 @@ class CamelUp():
             player = self.game_field[field][1]
             print("#"*len(player)+"#############\n"+player+" gets a coin!\n"+"#"*len(player)+"#############\n")
             self.players[self.game_field[field][1]].coins+=1
-            if camel not in ["Black","White"]:
+            if camel not in ["BLACK","WHITE"]:
                 field -= 1
             else:
                 field += 1
@@ -567,12 +570,18 @@ class CamelUp():
         """
         # determine camels that haven't moved:
         Camels_die = list(self.Camels)
+        if self.black_white:
+            Camels_die.remove("BLACK")
         for i in self.moved:
             if i in Camels_die:
-                del Camels_die[Camels_die.index(i)]
+                Camels_die.remove(i)
+                #if i == "BLACK":
+                #    Camels_die.remove("WHITE")
+                #elif i == "WHITE":
+                #    Camels_die.remove("BLACK")
 
         if not masked:
-            return Camels_die, 6-len(Camels_die_rendered) if self.black_white else 5-len(Camels_die_rendered)
+            return Camels_die, 6-len(Camels_die) if self.black_white else 5-len(Camels_die)
         ## encode camels that still die
         Camels_die_rendered = [self.mask[i] for i in Camels_die]
         ## handle special case of black and white camel
@@ -749,7 +758,7 @@ class CamelUp():
                 Camel_distance[i] = 5
                 distance = 0
                 desert_found = False
-            elif set(field[i]) & set(["White","Black"]):
+            elif set(field[i]) & set(["WHITE","BLACK"]):
                 Camel_distance[i] = 5
             elif desert_found:
                 Camel_distance[i] = 100
@@ -764,7 +773,7 @@ class CamelUp():
         if self.black_white:
             for i in range(15,-1,-1):
                 distance +=1
-                if set(field[i]) & set(["Black","White"]):
+                if set(field[i]) & set(["BLACK","WHITE"]):
                     distance = 1
                     desert_found = False
                 elif desert_found:
@@ -808,23 +817,23 @@ class CamelUp():
         for i in field:
             if "OASIS" not in i and "DESERT" not in i and len(i) > 0:
                 ranks.extend(i)
-        if "Black" in ranks: ## special case for extended game:
-            ranks.remove("Black")
-            ranks.remove("White")
+        if "BLACK" in ranks: ## special case for extended game:
+            ranks.remove("BLACK")
+            ranks.remove("WHITE")
         return ranks
 
     def die_r(self): ## DONE!
         moving, _ = self.render_camels_die(False)
         camel = moving[randrange(len(moving))]
-        if camel == "White":
-            camel = rd.choice(["Black","White"])
+        if camel == "WHITE":
+            camel = rd.choice(["BLACK","WHITE"])
         steps = randrange(1,4)
         lenstr = 6+7+7+1+len(camel)
         print("\n"+"#"*lenstr+"\nCamel "+camel+" moves "+str(steps)+" steps!\n"+"#"*lenstr+"\n")
-        self.move(camel,steps)
+        self.move(camel.capitalize(),steps)
     
     def game_not_end(self): ## DONE!
-        if len(set([*self.game_field[16],*self.game_field[17],*self.game_field[18]]).difference(set(["Black","White"]))) == 0:
+        if len(set([*self.game_field[16],*self.game_field[17],*self.game_field[18]]).difference(set(["BLACK","WHITE"]))) == 0:
             return True
         else:
             return False
@@ -851,7 +860,8 @@ class CamelUp():
         while self.game_not_end():
             player = list(self.players.keys())[index%n_players]
             self.make_a_move(player)
-            if len(self.moved) == 5:
+            camels_thrown, n_camels_moving = self.render_camels_die(False)
+            if n_camels_moving == 0 or n_camels_moving == 1 and self.black_white:
                 self.cl() #end of round function
                 if self.user_guide:
                     self.print_i()
@@ -860,22 +870,22 @@ class CamelUp():
 
     def game_end(self): ## DONE!
         self.moved = list(self.Camels)
-        if "Black" in self.moved:
-            self.moved.remove("Black")
+        if "BLACK" in self.moved:
+            self.moved.remove("BLACK")
         self.cl()
         self.print_c()
         ## determine loser:
         for i in self.game_field:
             if i != []:
                 if i[0] not in ["OASIS","DESERT"]:
-                    if i not in ["Black","White"]:
+                    if i not in ["BLACK","WHITE"]:
                         loser = i[0]
                         break
         ## determine winner:
         winner_stack = [*self.game_field[16],*self.game_field[17],*self.game_field[18]]
         for i in winner_stack[::-1]:
-            if i not in ["Black","White"]:
-                winner = i[0]
+            if i not in ["BLACK","WHITE"]:
+                winner = i
                 break
 
         print_hint2(loser+" lost track and is dead last!")
@@ -967,7 +977,9 @@ class CamelUp():
             if len(self.moved) == 0:
                 CNM = "No Camel has moved yet!  "
                 break
-            if i not in self.moved:
+            if i == "WHITE" and i not in self.moved:
+                CNM+="BLACK/WHITE, "
+            elif i not in self.moved and i != "BLACK":
                 CNM+=print_adj(i,8,"l")+", "
         self.one_turn(print_option=False,OD=True,player=player)
         self.print_game(True, True) # prints game with field and payoffs and player gains
@@ -986,7 +998,10 @@ class CamelUp():
                 print("Which camel?")
                 move = input()
                 if move.capitalize() in self.Camels:
-                    if move.capitalize() not in self.moved:
+                    dummy_name = move.capitalize()
+                    if dummy_name == "BLACK":
+                        dummy_name = "WHITE"
+                    if dummy_name not in self.moved:
                         print("How many steps did Camel "+move.capitalize()+" move?")
                         moves = input()
                         if moves not in ["1","2","3"]:
@@ -1048,7 +1063,7 @@ class CamelUp():
         # self.rec=True
 
 class Field():
-    Camels = CamelUp.standard_Camels + ["Black", "White"]
+    Camels = CamelUp.standard_Camels + ["BLACK", "WHITE"]
     Camels = tuple(Camels)
     def __init__(self,field=[],players=[],moved=[]):
         self.game_field = field
