@@ -323,9 +323,13 @@ class CamelUp():
                 ## contents are rendereded for each cell row
                 if field_n_content == []:
                     pass
-                elif field_n_content[0] in ["DESERT","OASIS", "(DESERT)"]:
-                    for i in range(len(field_n_content)):
-                        field_contents[i] = f"{field_contents[i]:^{self.render_field_cell_width}s}{vertical_sign}"
+                elif field_n_content[0] in ["DESERT","OASIS", "(DESERT)", "(OASIS)"]:
+                    if len(field_contents) == 0:
+                        for i in range(len(field_n_content)):
+                            field_contents.append(f"{field_n_content[i]:^{self.render_field_cell_width}s}{vertical_sign}")
+                    else:
+                        for i in range(len(field_n_content)):
+                            field_contents[i] = f"{field_contents[i]:^{self.render_field_cell_width}s}{vertical_sign}"
                 else:
                     for row_o in range(len(field_n_content)):
                         camel = field_n_content[row_o]
@@ -632,7 +636,7 @@ class CamelUp():
                     self.players[i].inventory_payoffs.append(EV_plate)
                     e_payoff += EV_plate
             if self.players[i].plate_pos != None:
-                expeted_hits = self.base_DO_hits[i]
+                expeted_hits = self.base_DO_hits[player_index]
                 e_payoff += expeted_hits
                 self.players[i].plate_value = expeted_hits
             self.players[i].expected_payoff = round(e_payoff,2)
@@ -673,7 +677,7 @@ class CamelUp():
         if print_option:
             self.print_game(True,True)
 
-    def _desert_iterator(self,player:str): ## done, untested
+    def _desert_iterator(self,player:str, verbose:int = 0): ## done, untested
         '''
         This function brute forces all potential desert and oasis fields for a given player. 
         The rule for taking these fields is: At max 4 fields in fron of any camel of the standard game. 
@@ -696,57 +700,59 @@ class CamelUp():
         field = self.game_field + []
         W_field = "xxx"
 
+        start_players = copy.deepcopy(self.players)
         fields = {}
         ## withdrawal field:
         for i in range(len(field)):
             if player in field[i]:
-                W_field = "W"+str(i+1)
+                j = i#+1
+                W_field = "W"+str(j)
                 field[i] = []
-                fields[W_field] = render_field(field)
+                fields[W_field] = render_field(field, start_players)
                 break
 
         ## calculate all possible fields for desert and oasis
         Camels = 0
-        distance = 0
+        distance = 5
         Camel_distance = [5] * 16
         desert_found = False
         for i in range(1,16):
             distance +=1
-            if field[i]==[]:
-                Camel_distance[i] = distance
-            elif desert_found:
-                Camel_distance[i] = 5
-                desert_found = False
-            elif set(field[i]) & set(self.Camels[:5]):
+            if set(field[i]) & set(self.Camels[:5]):
                 Camel_distance[i] = 5
                 distance = 0
-            elif set(field[i]) & set(["White","Black"]) and player in field[i]:
+                desert_found = False
+            elif set(field[i]) & set(["White","Black"]):
                 Camel_distance[i] = 5
-            elif set(field[i]) & set(["DESERT","OASIS"]) and not player in field[i]:
+            elif desert_found:
+                Camel_distance[i] = 100
+                desert_found = False
+            elif field[i]==[]:
+                Camel_distance[i] = distance
+            elif set(field[i]) & set(["DESERT","OASIS"]):
                 Camel_distance[i] = 5
                 desert_found = True
         ## special case for extended game:
         distance = 5; desert_found = False;
-        if len(self.Camels) > 5:
+        if self.black_white:
             for i in range(15,-1,-1):
                 distance +=1
-                if field[i] == []:
-                    Camel_distance[i] = min(distance,Camel_distance[i])
-                elif desert_found:
-                    Camel_distance[i] = 5
+                if set(field[i]) & set(["Black","White"]):
+                    distance = 1
                     desert_found = False
-                elif field[i] == ["Black"] or field[i] == ["White"]:
-                    distance = 0
-                elif set(field[i]) & set(["DESERT","OASIS"]) and not player in field[i]:
+                elif desert_found:
+                    Camel_distance[i] = 100
+                    desert_found = False
+                elif field[i] == [] and Camel_distance[i] != 100:
+                    Camel_distance[i] = min(distance,Camel_distance[i])
+                elif set(field[i]) & set(["DESERT","OASIS"]):
                     Camel_distance[i] = 5
                     desert_found = True
-
 
         legal_fields = [idx for idx,distance in enumerate(Camel_distance) if distance > 0 and distance < 5]
 
         Camels_die = [camel for camel in self.Camels if camel not in self.moved]
 
-        start_players = copy.deepcopy(self.players)
         for i in legal_fields:
             j = i#+1
             fields["D"+str(j)] = field.copy()
@@ -756,6 +762,8 @@ class CamelUp():
             fields["O"+str(j)][i] = ["OASIS",player]
             fields["O"+str(j)], _ = render_field(fields["O"+str(j)],start_players)
 
+        if verbose == 1:
+            return fields.keys()
         ## camels diced
 
         game_inventory_matrix = self.game_inventory_matrix(self.game_inventory)
