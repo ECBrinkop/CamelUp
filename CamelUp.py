@@ -36,7 +36,7 @@ class CamelUp():
             Betting Plates for each of the Camels
     '''
     gap_margin = 5
-    standard_Camels = ["Yellow","Blue","Green","Orange","Purple"]
+    standard_Camels = ["Purple", "Blue", "Orange", "Yellow", "Green"]
     standard_Inventory = [] # contains 
     for i in standard_Camels:
         standard_Inventory.extend([i+" [5]",i+" [3]",i+" [2]"])
@@ -115,6 +115,9 @@ class CamelUp():
             self.render_field_cell_width = self.render_field_cell_width_extended
             self.print_dim = self.print_dim_extended
             self.center_design = self.center_design_extended
+
+        ## freeze self.Camels to tuple to avoid changes in the list
+        self.Camels = tuple(self.Camels)
 
         self.total_width = (5*self.render_field_cell_width+6)
         self.user_guide=user_guide
@@ -421,7 +424,7 @@ class CamelUp():
         row_n = self.print_c(row_n)
 
         row_n += margins[3]
-        self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join(self.Camels)
+        self.rendered_output[row_n] += " "*gap_margin + "Camels not diced: " + " ".join([i for i in self.Camels if i not in self.moved])
         row_n += margins[4]
 
         self.rendered_output.extend([""," "*gap_margin + "Player Inventories and expected payoffs:"])
@@ -558,20 +561,22 @@ class CamelUp():
             color_index = self.Camels.index(color)
             self.game_inventory_matrix[color_index, number] += 1
 
-    def render_camels_die(self):
+    def render_camels_die(self, masked=True):
         """
         This function renders the camels that haven't moved.
         """
         # determine camels that haven't moved:
-        Camels_die = copy.deepcopy(self.Camels)
+        Camels_die = list(self.Camels)
         for i in self.moved:
             if i in Camels_die:
                 del Camels_die[Camels_die.index(i)]
 
+        if not masked:
+            return Camels_die, 6-len(Camels_die_rendered) if self.black_white else 5-len(Camels_die_rendered)
         ## encode camels that still die
         Camels_die_rendered = [self.mask[i] for i in Camels_die]
         ## handle special case of black and white camel
-        if "Black" in self.Camels:
+        if self.black_white:
             if 6 in Camels_die_rendered and 7 in Camels_die_rendered:
                 Camels_die_rendered.remove(7)
             elif 6 not in Camels_die_rendered and 7 in Camels_die_rendered:
@@ -773,8 +778,6 @@ class CamelUp():
 
         legal_fields = [idx for idx,distance in enumerate(Camel_distance) if distance > 0 and distance < 5]
 
-        Camels_die = [camel for camel in self.Camels if camel not in self.moved]
-
         for i in legal_fields:
             j = i#+1
             fields["D"+str(j)] = field.copy()
@@ -811,10 +814,7 @@ class CamelUp():
         return ranks
 
     def die_r(self): ## DONE!
-        moving = []
-        for i in self.Camels:
-            if i not in self.moved and i != "Black":
-                moving.append(i)
+        moving, _ = self.render_camels_die(False)
         camel = moving[randrange(len(moving))]
         if camel == "White":
             camel = rd.choice(["Black","White"])
@@ -859,7 +859,7 @@ class CamelUp():
         self.game_end() #end of game
 
     def game_end(self): ## DONE!
-        self.moved = self.Camels
+        self.moved = list(self.Camels)
         if "Black" in self.moved:
             self.moved.remove("Black")
         self.cl()
@@ -1048,7 +1048,7 @@ class CamelUp():
         # self.rec=True
 
 class Field():
-    Camels = CamelUp.standard_Camels + ["Black", "White"]
+    Camels = CamelUp.extended_Camels.copy()
     def __init__(self,field=[],players=[],moved=[]):
         self.game_field = field
         self.players = players
