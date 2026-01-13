@@ -622,12 +622,14 @@ class CamelUp():
         self.timers[-1]["one_turn_start"] = time.time() - self.timers[-1]["one_turn_start"]
 
         ## time all_moves for base field
-        self.timers.append({"sim_all_moves_start": time.time()})
+        self.timers.append({f"sim_all_moves_start{n_camels_thrown}": time.time()})
         ## run simulation numba accelerated
-        self.base_probabilities, self.base_DO_hits, VOI = sim_all_moves(
+        self.base_probabilities, self.base_DO_hits, self.VOI = sim_all_moves(
             rendered_field, len(self.players), n_camels_thrown, 
             Camels_die_rendered, self.game_inventory_matrix, verbose=False)
-        self.timers[-1]["sim_all_moves_start"] = time.time() - self.timers[-1]["sim_all_moves_start"]
+        if n_camels_thrown == 4:
+            self.VOI = 0
+        self.timers[-1][f"sim_all_moves_start{n_camels_thrown}"] = time.time() - self.timers[-1][f"sim_all_moves_start{n_camels_thrown}"]
         payoff = {}
         
         for i in range(rendered_field.shape[0]):
@@ -680,7 +682,7 @@ class CamelUp():
         player_index = list(self.players.keys()).index(player)
         ## Oasis and Desert value optimisation.
         if OD:
-            self.timers.append({"desert_iterator": time.time()})
+            self.timers.append({f"desert_iterator{n_camels_thrown}": time.time()})
             ## calculate desert value for player for all legal fields:
             self.DO_fields_payoffs = self._desert_iterator(player) ## prepared for it does not have to be rerun every turn. !!! implement this!
             ## returns a dictionary of payoffs
@@ -710,7 +712,7 @@ class CamelUp():
 
                 self.fields_payoffs[i] = delta
             #print(self.fields_payoffs)
-            self.timers[-1]["desert_iterator"] = time.time() - self.timers[-1]["desert_iterator"]
+            self.timers[-1][f"desert_iterator{n_camels_thrown}"] = time.time() - self.timers[-1][f"desert_iterator{n_camels_thrown}"]
         ## game should be printed only after calculations for deserts and oases are complete and expected payoffs are calculated.
         if print_option:
             self.print_game(True,True)
