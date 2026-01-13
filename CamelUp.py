@@ -306,31 +306,33 @@ class CamelUp():
                 if "O"+str(field_n) in self.fields_payoffs.keys() or\
                     "D"+str(field_n) in self.fields_payoffs.keys():
                     if field_n_content == []:
-                        field_contents = ["(DESERT)",self.fields_payoffs["D"+str(field_n)],
-                                            "(OASIS)",self.fields_payoffs["O"+str(field_n)]]
+                        field_contents = ["(DESERT)","({string:.2f})".format(string=self.fields_payoffs["D"+str(field_n)]),
+                                            "(OASIS)","({string:.2f})".format(string=self.fields_payoffs["O"+str(field_n)])]
                     elif field_n_content[0] in ["DESERT","OASIS"]:
                         #field_n_content +=[np.nan,"",""]
                         if field_n_content[0] == "OASIS":
                             field_contents = ["OASIS","({string:.2f})".\
                                 format(string=self.fields_payoffs["O"+str(field_n)]),
-                                "(DESERT)",self.fields_payoffs["D"+str(field_n)]]
+                                "(DESERT)","({string:.2f})".format(string=self.fields_payoffs["D"+str(field_n)])]
                         else:
                             field_contents = ["DESERT","({string:.2f})".\
                                 format(string=self.fields_payoffs["D"+str(field_n)]),
-                                "(OASIS)",self.fields_payoffs["O"+str(field_n)]]
-                        if "W"+str(field_n+1) in self.fields_payoffs.keys():
-                            field_contents.append("(({string:.2f}))".\
+                                "(OASIS)","({string:.2f})".format(string=self.fields_payoffs["O"+str(field_n)])]
+                        if "W"+str(field_n) in self.fields_payoffs.keys():
+                            field_contents.insert(0,"(({string:.2f}))".\
                                 format(string=self.fields_payoffs["W"+str(field_n)])) ## TODO: check if this is correct
+                    for i in range(len(field_contents)):
+                        field_contents[i] = f"{field_contents[i]:^{self.render_field_cell_width}s}{vertical_sign}"
                 ## contents are rendereded for each cell row
                 if field_n_content == []:
                     pass
-                elif field_n_content[0] in ["DESERT","OASIS", "(DESERT)", "(OASIS)"]:
+                elif field_n_content[0] in ["DESERT","OASIS", "(DESERT)"]:
                     if len(field_contents) == 0:
                         for i in range(len(field_n_content)):
                             field_contents.append(f"{field_n_content[i]:^{self.render_field_cell_width}s}{vertical_sign}")
-                    else:
-                        for i in range(len(field_n_content)):
-                            field_contents[i] = f"{field_contents[i]:^{self.render_field_cell_width}s}{vertical_sign}"
+                    #else:
+                    #    for i in range(len(field_n_content)):
+                    #        field_contents[i] = f"{field_contents[i]:^{self.render_field_cell_width}s}{vertical_sign}"
                 else:
                     for row_o in range(len(field_n_content)):
                         camel = field_n_content[row_o]
@@ -352,7 +354,15 @@ class CamelUp():
                         if row_m == n_rows_cells:
                             extra_sign = horizontal_sign
                         self.rendered_output[render_row]+= extra_sign
-                    self.rendered_output[render_row]+= field_contents[row_m]
+                    try:
+                        self.rendered_output[render_row]+= field_contents[row_m]
+                    except:
+                        print(
+                            "render_row:",render_row,"row_m:",row_m,
+                            "field_contents[row_m]:",field_contents[row_m],
+                            "self.rendered_output[render_row]:",self.rendered_output[render_row])
+                        raise Exception("Error in print_render_field")
+
             
     def print_render_payoffs(self): ## Done! untested!!!
         '''
@@ -536,17 +546,16 @@ class CamelUp():
         else:
             self.game_field[field].extend(moving_camels)
 
-    def game_inventory_matrix(self,game_inventory): ## Done!
+    def make_game_inventory_matrix(self,game_inventory): ## Done!
         '''
         This function creates a matrix of the game inventory.
         '''
-        game_inventory_matrix = np.zeros((5,3))
+        self.game_inventory_matrix = np.zeros((5,3))
         for i in game_inventory:
             color, number = i.split(" ")
             number = [5,3,2].index(int(number[1]))
             color_index = self.Camels.index(color)
-            game_inventory_matrix[color_index, number] += 1
-        return game_inventory_matrix
+            self.game_inventory_matrix[color_index, number] += 1
 
     def render_camels_die(self):
         """
@@ -577,6 +586,9 @@ class CamelUp():
         '''
         This function manages all the payoffs
         '''
+        ## time one turn start: field rendering, game inventory matrix creation
+        self.timers.append({"one_turn_start": time.time()})
+        
         if player not in self.players.keys():
             print("Invalid player!")
             return
@@ -590,13 +602,16 @@ class CamelUp():
         rendered_field, player_mapping = render_field(start_field,start_players)
         
         ## render game inventory matrix
-        game_inventory_matrix = self.game_inventory_matrix(self.game_inventory)
-        
+        self.make_game_inventory_matrix(self.game_inventory)
+        self.timers[-1]["one_turn_start"] = time.time() - self.timers[-1]["one_turn_start"]
+
+        ## time all_moves for base field
+        self.timers.append({"sim_all_moves_start": time.time()})
         ## run simulation numba accelerated
         self.base_probabilities, self.base_DO_hits, VOI = sim_all_moves(
             rendered_field, len(self.players), n_camels_thrown, 
-            Camels_die_rendered, game_inventory_matrix, verbose=False)
-        
+            Camels_die_rendered, self.game_inventory_matrix, verbose=False)
+        self.timers[-1]["sim_all_moves_start"] = time.time() - self.timers[-1]["sim_all_moves_start"]
         payoff = {}
         
         for i in range(rendered_field.shape[0]):
@@ -657,7 +672,7 @@ class CamelUp():
             for i in self.DO_fields_payoffs.keys():
                 field_payoff = self.DO_fields_payoffs[i]
                 ## delta base is the expected payoff of the players plate minus the base payoff of the plate of the player.
-                delta = -self.base_DO_hits[player_index,0] +field_payoff[1][player_index] ## create copy of delta base
+                delta = -self.base_DO_hits[player_index,0] +field_payoff[1][player_index,0] ## create copy of delta base
                 ## THIS player additionally gains, if the other players lose hits.
                 delta_other_players_hits = np.delete(self.base_DO_hits, player_index)-np.delete(field_payoff[1], player_index)
 
@@ -677,7 +692,7 @@ class CamelUp():
                         delta += delta_other_players_bets
 
                 self.fields_payoffs[i] = delta
-            print(self.fields_payoffs)
+            #print(self.fields_payoffs)
             self.timers[-1]["desert_iterator"] = time.time() - self.timers[-1]["desert_iterator"]
         ## game should be printed only after calculations for deserts and oases are complete and expected payoffs are calculated.
         if print_option:
@@ -772,15 +787,14 @@ class CamelUp():
             return fields.keys()
         ## camels diced
 
-        game_inventory_matrix = self.game_inventory_matrix(self.game_inventory)
         Camels_die_rendered, n_camels_thrown = self.render_camels_die()
 
         fields_payoffs = {}
         for i in fields.keys():
-            #print(type(fields[i]),type(len(start_players)),type(n_camels_thrown),type(Camels_die_rendered),type(game_inventory_matrix))
+            #print(type(fields[i]),type(len(start_players)),type(n_camels_thrown),type(Camels_die_rendered),type(self.game_inventory_matrix))
             fields_payoffs[i] = sim_all_moves(
                 fields[i],len(start_players),n_camels_thrown,
-                Camels_die_rendered,game_inventory_matrix, verbose = False)
+                Camels_die_rendered,self.game_inventory_matrix, verbose = False)
 
         return fields_payoffs # dictionary of potential plate fields: returns and their payoff matrix
 
@@ -1256,8 +1270,8 @@ def _simulate_paths(
                     target_field -= 1
             if target_field < 0:
                 target_field = 0
+            stack_len = stack.shape[1]
             if below_target:
-                stack_len = stack.shape[1]
                 end = (field_copy[target_field] != 0).sum()
                 for j in range(end + stack_len - 1, stack_len - 1, -1):
                     field_copy[target_field, j] = field_copy[target_field, j - stack_len]
@@ -1265,7 +1279,12 @@ def _simulate_paths(
                     field_copy[target_field, j] = stack[0, j]
             else:
                 end_target_field = (field_copy[target_field] != 0).sum()
-                field_copy[target_field, end_target_field: end_target_field + stack.shape[1]] = stack
+                if end_target_field + stack_len > 7:
+                    print("Warning: Stack length exceeds field length at target field:",target_field)
+                    print("stack:",stack, "Camel moving", camel)
+                    print(field_copy)
+
+                field_copy[target_field, end_target_field: end_target_field + stack_len] = stack
 
             for i in range(7):
                 if field_copy[target_field, i] == 0:
@@ -1274,7 +1293,7 @@ def _simulate_paths(
                 camel_row_idx[camel_update] = target_field
                 camel_col_idx[camel_update] = i
 
-            if target_field > 16:
+            if target_field > 15:
                 break
         # Ranking and counting step
         camel_positions = np.zeros(5)
@@ -1380,6 +1399,7 @@ def sim_all_moves(
         n_threads, n_players, extra_dim, 
         positions_local, DO_hits_local
     )
+    fame_inventory_matrix = game_inventory_matrix.copy()
     positions, DO_hits, n_paths, next_voi, game_inventory_multiplier = _aggregate_results(
         positions_local, DO_hits_local, game_inventory_matrix, n_players)
     inv_n = 1.0 / n_paths.sum()
