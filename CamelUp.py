@@ -232,7 +232,7 @@ class CamelUp():
                 #        self.game_field[pos]+=[self.fields_payoffs["O"+str(pos)]]
                 #    else:
                 #        self.game_field[pos]+=[self.fields_payoffs["D"+str(pos)]]
-                #self.players[player].plate_pos = pos
+                self.players[player].plate_pos = pos
                 break
         # self.print_game()
     def print_game(self,
@@ -333,6 +333,8 @@ class CamelUp():
                     pass
                 elif field_n_content[0] in ["DESERT","OASIS", "(DESERT)"]:
                     if len(field_contents) == 0:
+                        player = field_n_content[1]
+                        field_n_content.append(str(round(self.players[player].plate_value,2)))
                         for i in range(len(field_n_content)):
                             field_contents.append(f"{field_n_content[i]:^{self.render_field_cell_width}s}{vertical_sign}")
                     #else:
@@ -442,12 +444,12 @@ class CamelUp():
                 dice_counts = player.inventory.count("Diced")
             self.rendered_output[-1] += f"Diced: {dice_counts}, "
             if player.plate_pos != None:
-                self.rendered_output[-1] += f"D/O-plate[{player.plate_pos+1}]: {player.plate_value}, "
+                self.rendered_output[-1] += f"D/O-plate[{player.plate_pos+1}]: {player.plate_value:4.2f}, "
             for element, payoff in zip(player.inventory, player.inventory_payoffs):
                 if element == "Diced":
                     continue
                 else:
-                    self.rendered_output[-1] += f"{element}: {payoff}, "
+                    self.rendered_output[-1] += f"{element}: {payoff:4.2f}, "
 
     def print_c(self, index = 0): ## DONE! 
         if index == 0:
@@ -975,7 +977,7 @@ class CamelUp():
                   "–"*(10+6*col0_len) )
         print(print_adj("Type",10,"c")+" | "+print_adj("[color]",col0_len-5,"c")+" | "+\
               print_adj("t",col0_len-5,"c")+" | "+ print_adj("r",col0_len,"c")+" | "+
-              print_adj("o, d or w",col0_len,"c")+" | "+print_adj("f",col0_len,"c") + " | "+print_adj("q",col0_len,"c"))+" |"
+              print_adj("o, d or w",col0_len,"c")+" | "+print_adj("f",col0_len,"c") + " | "+print_adj("q",col0_len,"c")+" |")
 
     def make_a_move(self,player):
         # self.print_game(True,True)
