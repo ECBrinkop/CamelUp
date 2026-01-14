@@ -99,7 +99,8 @@ class CamelUp():
                  start:bool = True,
                  field = "",
                  user_guide=True,
-                 black_white= False): ## DONE!
+                 black_white= False,
+                 print_init = False): ## DONE!
         self.black_white = black_white
         self.Camels = copy.deepcopy(self.standard_Camels)
         self.Inventory = copy.deepcopy(self.standard_Inventory)
@@ -149,10 +150,11 @@ class CamelUp():
                         self.players[name] = player(name)
                         break
             self.position(start)
-        print("—"*self.total_width)
-        self.print_game(True, False)
-        self.print_c()
-        print("—"*self.total_width)
+        if print_init:
+            print("—"*self.total_width)
+            self.print_game(True, False)
+            self.print_c()
+            print("—"*self.total_width)
 
     def position(self,start=False): ## DONE!
         """
@@ -969,11 +971,11 @@ class CamelUp():
         col0_len = 20
         print(print_adj("Action",10)+" | "+print_adj("Take top bet:",col0_len-5)+" | "+\
               print_adj("Throw dice:",col0_len-5)+" | "+print_adj("Throw dice random:",col0_len)+" | "+\
-              print_adj("Set Oasis/Desert:",col0_len)+" | "+print_adj("Take final bet:",col0_len)+" | "+print_adj("Exit:",col0_len)+"\n"+\
-                  "–"*(10+5*col0_len) )
+              print_adj("Set Oasis/Desert:",col0_len)+" | "+print_adj("Take final bet:",col0_len)+" | "+print_adj("Exit:",col0_len)+" |"+"\n"+\
+                  "–"*(10+6*col0_len) )
         print(print_adj("Type",10,"c")+" | "+print_adj("[color]",col0_len-5,"c")+" | "+\
               print_adj("t",col0_len-5,"c")+" | "+ print_adj("r",col0_len,"c")+" | "+
-              print_adj("o, d or w",col0_len,"c")+" | "+print_adj("f",col0_len,"c") + " | "+print_adj("q",col0_len,"c"))
+              print_adj("o, d or w",col0_len,"c")+" | "+print_adj("f",col0_len,"c") + " | "+print_adj("q",col0_len,"c"))+" |"
 
     def make_a_move(self,player):
         # self.print_game(True,True)
@@ -995,7 +997,7 @@ class CamelUp():
             self.print_i()
         sys.stdout.flush()
         while True:
-            print("Move t for throw a camel, r for random throw, o or d or w for desert, oasis, [Camel] for bet, f for final bet")
+            #print("Move t for throw a camel, r for random throw, o or d or w for desert, oasis, [Camel] for bet, f for final bet")
             move_input = input()
             move = move_input.upper()
             if move == "Q":
