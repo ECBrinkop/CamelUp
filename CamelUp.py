@@ -225,12 +225,12 @@ class CamelUp():
                     print("Invalid field, retry!")
             else:
                 self.game_field[pos] = [plate,player]
-                if "O"+str(pos) in self.fields.keys():
-                    if plate == "OASIS":
-                        self.game_field[pos]+=[self.fields["O"+str(pos)]]
-                    else:
-                        self.game_field[pos]+=[self.fields["D"+str(pos)]]
-                self.players[player].plate_pos = pos
+                #if "O"+str(pos) in self.fields_payoffs.keys():
+                #    if plate == "OASIS":
+                #        self.game_field[pos]+=[self.fields_payoffs["O"+str(pos)]]
+                #    else:
+                #        self.game_field[pos]+=[self.fields_payoffs["D"+str(pos)]]
+                #self.players[player].plate_pos = pos
                 break
         # self.print_game()
     def print_game(self,
@@ -863,7 +863,9 @@ class CamelUp():
         # actual game
         while self.game_not_end():
             player = list(self.players.keys())[index%n_players]
-            self.make_a_move(player)
+            keep_playing = self.make_a_move(player)
+            if not keep_playing:
+                return
             if len(self.moved) == 5:
                 self.cl() #end of round function
                 if self.user_guide:
@@ -997,7 +999,7 @@ class CamelUp():
             move_input = input()
             move = move_input.upper()
             if move == "Q":
-                sys.exit()
+                return False
             elif move == "T":
                 print("Which camel?")
                 move = input()
@@ -1064,7 +1066,7 @@ class CamelUp():
                 print(move_input +" is not a legal move. Check Choices!")
         if move in ["O","D","W","R","T"]:
             self.rec=True
-        # self.rec=True
+        return True
 
 class Field():
     Camels = CamelUp.standard_Camels + ["BLACK", "WHITE"]
